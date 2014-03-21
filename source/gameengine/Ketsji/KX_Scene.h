@@ -87,6 +87,7 @@ class btCollisionShape;
 class KX_BlenderSceneConverter;
 struct KX_ClientObjectInfo;
 class KX_ObstacleSimulation;
+class KX_ResourceManager;
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #include "MEM_guardedalloc.h"
@@ -155,6 +156,7 @@ protected:
 	SCA_KeyboardManager*	m_keyboardmgr;
 	SCA_MouseManager*		m_mousemgr;
 	SCA_TimeEventManager*	m_timemgr;
+	KX_ResourceManager*		m_resourcemgr;
 
 	// Scene converter where many scene entities are registered
 	// Used to deregister objects that are deleted
@@ -376,6 +378,10 @@ public:
 
 		SCA_LogicManager *
 	GetLogicManager(
+	);
+
+	KX_ResourceManager *
+		GetResourceManager(
 	);
 
 		SCA_TimeEventManager *

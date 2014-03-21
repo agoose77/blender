@@ -37,6 +37,7 @@
 
 #include "KX_Scene.h"
 #include "KX_PythonInit.h"
+#include "KX_ResourceManager.h"
 #include "MT_assert.h"
 #include "KX_KetsjiEngine.h"
 #include "KX_BlenderMaterial.h"
@@ -175,6 +176,7 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 	m_animatedlist = new CListValue();
 
 	m_logicmgr = new SCA_LogicManager();
+	m_resourcemgr = new KX_ResourceManager();
 	
 	m_timemgr = new SCA_TimeEventManager(m_logicmgr);
 	m_keyboardmgr = new SCA_KeyboardManager(m_logicmgr,keyboarddevice);
@@ -193,12 +195,12 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 
 	//m_logicmgr->RegisterEventManager(alwaysmgr);
 	//m_logicmgr->RegisterEventManager(propmgr);
+	//m_logicmgr->RegisterEventManager(rndmgr);
+	//m_logicmgr->RegisterEventManager(raymgr);
 	m_logicmgr->RegisterEventManager(actmgr);
 	m_logicmgr->RegisterEventManager(m_keyboardmgr);
 	m_logicmgr->RegisterEventManager(m_mousemgr);
 	m_logicmgr->RegisterEventManager(m_timemgr);
-	//m_logicmgr->RegisterEventManager(rndmgr);
-	//m_logicmgr->RegisterEventManager(raymgr);
 	m_logicmgr->RegisterEventManager(netmgr);
 	m_logicmgr->RegisterEventManager(basicmgr);
 
@@ -341,6 +343,11 @@ CListValue* KX_Scene::GetLightList()
 SCA_LogicManager* KX_Scene::GetLogicManager()
 {
 	return m_logicmgr;
+}
+
+KX_ResourceManager* KX_Scene::GetResourceManager()
+{
+	return m_resourcemgr;
 }
 
 SCA_TimeEventManager* KX_Scene::GetTimeEventManager()
@@ -731,7 +738,7 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 			// this check is also in group_duplilist()
 			continue;
 
-		gameobj = (KX_GameObject*)m_logicmgr->FindGameObjByBlendObj(blenderobj);
+		gameobj = (KX_GameObject*)m_resourcemgr->FindGameObjByBlendObj(blenderobj);
 		if (gameobj == NULL) 
 		{
 			// this object has not been converted!!!
@@ -1021,7 +1028,7 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 	// note that all the replicas of an object will have the same
 	// blender object, that's why we need to check the game object
 	// as only the deletion of the original object must be recorded
-	m_logicmgr->UnregisterGameObj(newobj->GetBlenderObject(), gameobj);
+	m_resourcemgr->UnregisterGameObj(newobj->GetBlenderObject(), gameobj);
 
 	//todo: look at this
 	//GetPhysicsEnvironment()->RemovePhysicsController(gameobj->getPhysicsController());
@@ -1152,7 +1159,7 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 			// this always return the original game object (also for replicate)
 			Object* blendobj = newobj->GetBlenderObject();
 			// object that owns the new mesh
-			Object* oldblendobj = static_cast<struct Object*>(m_logicmgr->FindBlendObjByGameMeshName(mesh->GetName()));
+			Object* oldblendobj = static_cast<struct Object*>(m_resourcemgr->FindBlendObjByGameMeshName(mesh->GetName()));
 			Mesh* blendmesh = mesh->GetMesh();
 
 			bool bHasModifier = BL_ModifierDeformer::HasCompatibleDeformer(blendobj);
@@ -1991,11 +1998,11 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 		to->AddCamera((KX_Camera*)gameobj);
 
 	/* Add the object to the scene's logic manager */
-	to->GetLogicManager()->RegisterGameObjectName(gameobj->GetName(), gameobj);
-	to->GetLogicManager()->RegisterGameObj(gameobj->GetBlenderObject(), gameobj);
+	to->GetResourceManager()->RegisterGameObjectName(gameobj->GetName(), gameobj);
+	to->GetResourceManager()->RegisterGameObj(gameobj->GetBlenderObject(), gameobj);
 
 	for (int i=0; i<gameobj->GetMeshCount(); ++i)
-		to->GetLogicManager()->RegisterGameMeshName(gameobj->GetMesh(i)->GetName(), gameobj->GetBlenderObject());
+		to->GetResourceManager()->RegisterGameMeshName(gameobj->GetMesh(i)->GetName(), gameobj->GetBlenderObject());
 }
 
 bool KX_Scene::MergeScene(KX_Scene *other)

@@ -38,7 +38,7 @@
 
 // These three are for getting the action from the logic manager
 #include "KX_Scene.h"
-#include "SCA_LogicManager.h"
+#include "KX_ResourceManager.h"
 
 extern "C" {
 #include "BKE_animsys.h"
@@ -128,7 +128,7 @@ bool BL_Action::Play(const char* name,
 	KX_Scene* kxscene = m_obj->GetScene();
 
 	// First try to load the action
-	m_action = (bAction*)kxscene->GetLogicManager()->GetActionByName(name);
+	m_action = (bAction*)kxscene->GetResourceManager()->GetActionByName(name);
 	if (!m_action)
 	{
 		printf("Failed to load action: %s\n", name);

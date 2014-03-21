@@ -425,6 +425,52 @@ static PyObject *gPyGetSpectrum(PyObject *)
 	return resultlist;
 }
 
+static PyObject *gPySetAnimationTicRate(PyObject *, PyObject *args)
+{
+	float ticrate;
+	if (!PyArg_ParseTuple(args, "f:setAnimationTicRate", &ticrate))
+		return NULL;
+	
+	KX_KetsjiEngine::SetAnimFrameRate(ticrate);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetAnimationTicRate(PyObject *)
+{
+	return PyFloat_FromDouble(KX_KetsjiEngine::GetAnimFrameRate());
+}
+
+static PyObject *gPySetUseFrameRate(PyObject *, PyObject *args)
+{
+	bool condition;
+	if (!PyArg_ParseTuple(args, "p:setUseFixedTime", &condition))
+		return NULL;
+	
+	KX_KetsjiEngine::SetUseFixedTime(condition);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetUseFrameRate(PyObject *)
+{
+	// For some reason m_bFixedTime is false when using fixed timestep
+	return PyBool_FromLong(!KX_KetsjiEngine::GetUseFixedTime());
+}
+
+static PyObject *gPySetRestrictAnimationUpdates(PyObject *, PyObject *args)
+{
+	bool condition;
+	if (!PyArg_ParseTuple(args, "p:setRestrictAnimationUpdates", &condition))
+		return NULL;
+	
+	KX_KetsjiEngine::SetRestrictAnimationFPS(condition);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetRestrictAnimationUpdates(PyObject *)
+{
+	return PyBool_FromLong(KX_KetsjiEngine::GetRestrictAnimationFPS());
+}
+
 static PyObject *gPySetLogicTicRate(PyObject *, PyObject *args)
 {
 	float ticrate;
@@ -829,22 +875,6 @@ static PyObject *gLibList(PyObject *, PyObject *args)
 	return list;
 }
 
-struct PyNextFrameState pynextframestate;
-static PyObject *gPyNextFrame(PyObject *)
-{
-	if (pynextframestate.func == NULL) Py_RETURN_NONE;
-	if (pynextframestate.state == NULL) Py_RETURN_NONE; //should never happen; raise exception instead?
-
-	if (pynextframestate.func(pynextframestate.state)) //nonzero = stop
-	{ 
-		Py_RETURN_TRUE;
-	}
-	else // 0 = go on
-	{
-		Py_RETURN_FALSE;
-	}
-}
-
 
 static struct PyMethodDef game_methods[] = {
 	{"expandPath", (PyCFunction)gPyExpandPath, METH_VARARGS, (const char *)gPyExpandPath_doc},
@@ -867,6 +897,13 @@ static struct PyMethodDef game_methods[] = {
 	{"setMaxPhysicsFrame", (PyCFunction) gPySetMaxPhysicsFrame, METH_VARARGS, (const char *)"Sets the max number of physics farme per render frame"},
 	{"getLogicTicRate", (PyCFunction) gPyGetLogicTicRate, METH_NOARGS, (const char *)"Gets the logic tic rate"},
 	{"setLogicTicRate", (PyCFunction) gPySetLogicTicRate, METH_VARARGS, (const char *)"Sets the logic tic rate"},
+	{"getUseFrameRate", (PyCFunction) gPyGetUseFrameRate, METH_NOARGS, (const char *)"Gets the status of use frame rate"},
+	{"setUseFrameRate", (PyCFunction) gPySetUseFrameRate, METH_VARARGS, (const char *)"Sets the status of use frame rate"},
+	{"getRestrictAnimationUpdates", (PyCFunction) gPyGetRestrictAnimationUpdates, METH_NOARGS, (const char *)"Gets the status of fixed animation updates"},
+	{"SetRestrictAnimationUpdates", (PyCFunction) gPySetRestrictAnimationUpdates, METH_VARARGS, (const char *)"Sets the status of fixed animation updates"},
+	{"getAnimationTicRate", (PyCFunction) gPyGetAnimationTicRate, METH_NOARGS, (const char *)"Gets the animation tic rate"},
+	{"setAnimationTicRate", (PyCFunction) gPySetAnimationTicRate, METH_VARARGS, (const char *)"Sets the animation tic rate"},
+
 	{"getPhysicsTicRate", (PyCFunction) gPyGetPhysicsTicRate, METH_NOARGS, (const char *)"Gets the physics tic rate"},
 	{"setPhysicsTicRate", (PyCFunction) gPySetPhysicsTicRate, METH_VARARGS, (const char *)"Sets the physics tic rate"},
 	{"getExitKey", (PyCFunction) gPyGetExitKey, METH_NOARGS, (const char *)"Gets the key used to exit the game engine"},
@@ -875,7 +912,6 @@ static struct PyMethodDef game_methods[] = {
 	{"getBlendFileList", (PyCFunction)gPyGetBlendFileList, METH_VARARGS, (const char *)"Gets a list of blend files in the same directory as the current blend file"},
 	{"PrintGLInfo", (PyCFunction)pyPrintExt, METH_NOARGS, (const char *)"Prints GL Extension Info"},
 	{"PrintMemInfo", (PyCFunction)pyPrintStats, METH_NOARGS, (const char *)"Print engine statistics"},
-	{"NextFrame", (PyCFunction)gPyNextFrame, METH_NOARGS, (const char *)"Render next frame (if Python has control)"},
 	{"getProfileInfo", (PyCFunction)gPyGetProfileInfo, METH_NOARGS, gPyGetProfileInfo_doc},
 	/* library functions */
 	{"LibLoad", (PyCFunction)gLibLoad, METH_VARARGS|METH_KEYWORDS, (const char *)""},
@@ -1912,6 +1948,17 @@ PyObject *initGameLogic(KX_KetsjiEngine *engine, KX_Scene* scene) // quick hack 
 	KX_MACRO_addTypesToDict(d, KX_ACTION_BLEND_BLEND, BL_Action::ACT_BLEND_BLEND);
 	KX_MACRO_addTypesToDict(d, KX_ACTION_BLEND_ADD, BL_Action::ACT_BLEND_ADD);
 
+	/* KX_KetsjiEngine debug modes */
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_PHYSICS, KX_TimeCategory::tc_physics);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_MESSAGES, KX_TimeCategory::tc_network);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_ANIMATIONS, KX_TimeCategory::tc_animations);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_LOGIC, KX_TimeCategory::tc_logic);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_SCENEGRAPH, KX_TimeCategory::tc_scenegraph);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_RASTERIZER, KX_TimeCategory::tc_rasterizer);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_SERVICES, KX_TimeCategory::tc_services);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_OVERHEAD, KX_TimeCategory::tc_overhead);
+	KX_MACRO_addTypesToDict(d, KX_ENGINE_DEBUG_OUTSIDE, KX_TimeCategory::tc_outside);
+	
 	/* Mouse Actuator object axis*/
 	KX_MACRO_addTypesToDict(d, KX_ACT_MOUSE_OBJECT_AXIS_X, KX_MouseActuator::KX_ACT_MOUSE_OBJECT_AXIS_X);
 	KX_MACRO_addTypesToDict(d, KX_ACT_MOUSE_OBJECT_AXIS_Y, KX_MouseActuator::KX_ACT_MOUSE_OBJECT_AXIS_Y);

@@ -40,6 +40,7 @@
 #include "KX_Scene.h"
 #include "KX_Python.h"
 #include "KX_WorldInfo.h"
+#include "KX_EngineCallbackData.h"
 #include <vector>
 
 struct TaskScheduler;
@@ -60,6 +61,22 @@ enum KX_ExitRequestMode
 	KX_EXIT_REQUEST_MAX
 };
 
+/** Categories for profiling display. */
+typedef enum {
+	tc_first = 0,
+	tc_physics = 0,
+	tc_logic,
+	tc_animations,
+	tc_network,
+	tc_scenegraph,
+	tc_rasterizer,
+	tc_services,	// time spent in miscelaneous activities
+	tc_overhead,	// profile info drawing overhead
+	tc_outside,		// time spent outside main loop
+	tc_latency,		// time spent waiting on the gpu
+	tc_numCategories
+} KX_TimeCategory;
+
 typedef struct {
 	short matmode;
 	short glslflag;
@@ -77,6 +94,7 @@ private:
 	class KX_ISystem*					m_kxsystem;
 	class KX_ISceneConverter*			m_sceneconverter;
 	class NG_NetworkDeviceInterface*	m_networkdevice;
+	class KX_KetsjiLogicLoop*			m_logicloop;
 #ifdef WITH_PYTHON
 	/* borrowed from sys.modules["__main__"], don't manage ref's */
 	PyObject*					m_pythondictionary;
@@ -102,7 +120,6 @@ private:
 
 	bool				m_bInitialized;
 	int					m_activecam;
-	bool				m_bFixedTime;
 	
 	
 	bool				m_firstframe;
@@ -119,6 +136,7 @@ private:
 	static double			m_anim_framerate; /* for animation playback only - ipo and action */
 
 	static bool				m_restrict_anim_fps;
+	static bool				m_bFixedTime;
 
 	static double			m_suspendedtime;
 	static double			m_suspendeddelta;
@@ -161,6 +179,7 @@ private:
 
 	/** Time logger. */
 	KX_TimeCategoryLogger*	m_logger;
+	KX_EngineCallbackData* m_logiccallbacks;
 	
 	/** Labels for profiling display. */
 	static const char		m_profileLabels[tc_numCategories][15];
@@ -217,19 +236,28 @@ public:
 	void			SetNetworkDevice(NG_NetworkDeviceInterface* networkdevice);
 	void			SetCanvas(RAS_ICanvas* canvas);
 	void			SetRasterizer(RAS_IRasterizer* rasterizer);
+	void			SetLogicLoop(KX_KetsjiLogicLoop* logicloop);
+ 	void			SetLogger(KX_TimeCategoryLogger* logger);
+ 	void			SetEngineCallbacks(KX_EngineCallbackData* callbacks);
 #ifdef WITH_PYTHON
 	void			SetPyNamespace(PyObject *pythondictionary);
 	PyObject*		GetPyNamespace() { return m_pythondictionary; }
 	PyObject*		GetPyProfileDict();
 #endif
 	void			SetSceneConverter(KX_ISceneConverter* sceneconverter);
+	void			SetAnimRecordMode(bool animation_record);
 	KX_ISceneConverter* GetSceneConverter() { return m_sceneconverter; }
 	void			SetAnimRecordMode(bool animation_record, int startFrame);
 
+	KX_EngineCallbackData*		GetEngineCallbacks() {return m_logiccallbacks;}
 	RAS_IRasterizer*		GetRasterizer() { return m_rasterizer; }
 	RAS_ICanvas*		    GetCanvas() { return m_canvas; }
 	SCA_IInputDevice*		GetKeyboardDevice() { return m_keyboarddevice; }
 	SCA_IInputDevice*		GetMouseDevice() { return m_mousedevice; }
+ 	KX_TimeCategoryLogger*		GetLogger() { return m_logger; }
+ 	NG_NetworkDeviceInterface*	GetNetworkDevice() { return m_networkdevice; }
+ 	KX_ISceneConverter*			GetSceneConverter() { return m_sceneconverter; }
+ 	KX_KetsjiLogicLoop*		GetLogicLoop() { return m_logicloop; }
 
 	TaskScheduler*			GetTaskScheduler() { return m_taskscheduler; }
 
@@ -239,8 +267,7 @@ public:
 	void			RenderDome();
 	bool			m_usedome;
 
-	///returns true if an update happened to indicate -> Render
-	bool			NextFrame();
+	void			UpdateEvents();
 	void			Render();
 	
 	void			StartEngine(bool clearIpo);
@@ -273,34 +300,43 @@ public:
 	void SetCameraOverrideViewMatrix(const MT_CmMatrix4x4& mat);
 	void SetCameraOverrideClipping(float near, float far);
 	void SetCameraOverrideLens(float lens);
-	
-	/**
-	 * Sets display of all frames.
-	 * \param bUseFixedTime	New setting for display all frames.
-	 */ 
-	void SetUseFixedTime(bool bUseFixedTime);
 
 	/**
 	 * Returns display of all frames.
 	 * \return Current setting for display all frames.
 	 */ 
-	bool GetUseFixedTime(void) const;
+	double GetPreviousAnimTime(){return m_previousAnimTime;};
+ 	void SetPreviousAnimTime(double time){m_previousAnimTime = time;};
 
 	/**
 	 * Returns current render frame clock time
 	 */
 	double GetClockTime(void) const;
+	void SetClockTime(double time);
 	/**
 	 * Returns current logic frame clock time
 	 */
 	double GetFrameTime(void) const;
+	void SetFrameTime(double time);
 
 	double GetRealTime(void) const;
+	
+	/**
+	 * Sets display of all frames.
+	 * \param bUseFixedTime	New setting for display all frames.
+	 */ 
+	static void SetUseFixedTime(bool bUseFixedTime);
+	static bool GetUseFixedTime();
+
 	/**
 	 * Returns the difference between the local time of the scene (when it
 	 * was running and not suspended) and the "curtime"
 	 */
 	static double GetSuspendedDelta();
+ 	static void SetSuspendedDelta(double time);
+  
+ 	static double GetSuspendedTime();
+ 	static void SetSuspendedTime(double time);
 
 	/**
 	 * Gets the number of logic updates per second.
@@ -332,6 +368,10 @@ public:
 	 */
 	static bool GetRestrictAnimationFPS();
 
+ 	bool GetAnimationRecord();
+
+ 	int GetAnimationFrame();
+	void SetAnimationFrame(int frame);
 	/**
 	 * Sets whether or not to lock animation updates to the animframerate
 	 */
@@ -462,8 +502,6 @@ public:
 	 * It's only called from Blenderplayer.
 	 */
 	void			Resize();
-
-protected:
 	/**
 	 * Processes all scheduled scene activity.
 	 * At the end, if the scene lists have changed,
@@ -472,10 +510,11 @@ protected:
 	 */
 	void			ProcessScheduledScenes(void);
 
+protected:
+
 	/**
 	 * This method is invoked when the scene lists have changed.
 	 */
-
 	void			RemoveScheduledScenes(void);
 	void			AddScheduledScenes(void);
 	void			ReplaceScheduledScenes(void);

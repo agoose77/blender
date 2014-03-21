@@ -35,6 +35,8 @@
 #include "KX_MeshProxy.h"
 #include "RAS_IPolygonMaterial.h"
 #include "RAS_MeshObject.h"
+#include "KX_PythonInit.h"
+#include "KX_ResourceManager.h"
 
 #include "KX_VertexProxy.h"
 #include "KX_PolyProxy.h"
@@ -425,7 +427,7 @@ bool ConvertPythonToMesh(PyObject *value, RAS_MeshObject **object, bool py_none_
 	}
 	
 	if (PyUnicode_Check(value)) {
-		*object = (RAS_MeshObject*)SCA_ILogicBrick::m_sCurrentLogicManager->GetMeshByName(STR_String( _PyUnicode_AsString(value) ));
+		*object = (RAS_MeshObject*)KX_GetActiveScene()->GetResourceManager()->GetMeshByName(STR_String( _PyUnicode_AsString(value) ));
 		
 		if (*object) {
 			return true;

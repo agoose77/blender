@@ -686,6 +686,8 @@ typedef struct GameData {
 	float eyeseparation;
 	RecastData recastData;
 
+	char custom_loop[64];
+
 
 	/* physics (it was in world)*/
 	float gravity; /*Gravitation constant for the game world*/

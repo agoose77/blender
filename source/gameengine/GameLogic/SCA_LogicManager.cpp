@@ -56,91 +56,10 @@ SCA_LogicManager::~SCA_LogicManager()
 	assert(m_activeActuators.Empty());
 }
 
-#if 0
-// this kind of fixes bug 398 but breakes games, so better leave it out for now.
-// a removed object's gameobject (and logicbricks and stuff) didn't get released
-// because it was still in the m_mapStringToGameObjects map.
-void SCA_LogicManager::RemoveGameObject(const STR_String& gameobjname)
-{
-	int numgameobj = m_mapStringToGameObjects.size();
-	for (int i = 0; i < numgameobj; i++)
-	{
-		CValue** gameobjptr = m_mapStringToGameObjects.at(i);
-		assert(gameobjptr);
-
-		if (gameobjptr)
-		{
-			if ((*gameobjptr)->GetName() == gameobjname)
-				(*gameobjptr)->Release();
-		}
-	}
-
-	m_mapStringToGameObjects.remove(gameobjname);
-}
-#endif
-
 
 void SCA_LogicManager::RegisterEventManager(SCA_EventManager* eventmgr)
 {
 	m_eventmanagers.push_back(eventmgr);
-}
-
-
-
-void SCA_LogicManager::RegisterGameObjectName(const STR_String& gameobjname,
-											  CValue* gameobj)
-{
-	STR_HashedString mn = gameobjname;
-	m_mapStringToGameObjects.insert(mn,gameobj);
-}
-
-
-
-void SCA_LogicManager::RegisterGameMeshName(const STR_String& gamemeshname, void* blendobj)
-{
-	STR_HashedString mn = gamemeshname;
-	m_map_gamemeshname_to_blendobj.insert(mn, blendobj);
-}
-
-
-
-void SCA_LogicManager::RegisterGameObj(void* blendobj, CValue* gameobj) 
-{
-	m_map_blendobj_to_gameobj.insert(CHashedPtr(blendobj), gameobj);
-}
-
-void SCA_LogicManager::UnregisterGameObj(void* blendobj, CValue* gameobj) 
-{
-	void **obp = m_map_blendobj_to_gameobj[CHashedPtr(blendobj)];
-	if (obp && (CValue*)(*obp) == gameobj)
-		m_map_blendobj_to_gameobj.remove(CHashedPtr(blendobj));
-}
-
-CValue* SCA_LogicManager::GetGameObjectByName(const STR_String& gameobjname)
-{
-	STR_HashedString mn = gameobjname;
-	CValue** gameptr = m_mapStringToGameObjects[mn];
-	
-	if (gameptr)
-		return *gameptr;
-
-	return NULL;
-}
-
-
-CValue* SCA_LogicManager::FindGameObjByBlendObj(void* blendobj) 
-{
-	void **obp= m_map_blendobj_to_gameobj[CHashedPtr(blendobj)];
-	return obp?(CValue*)(*obp):NULL;
-}
-
-
-
-void* SCA_LogicManager::FindBlendObjByGameMeshName(const STR_String& gamemeshname) 
-{
-	STR_HashedString mn = gamemeshname;
-	void **obp= m_map_gamemeshname_to_blendobj[mn];
-	return obp?*obp:NULL;
 }
 
 
@@ -246,54 +165,6 @@ void SCA_LogicManager::UpdateFrame(double curtime, bool frame)
 		}
 	}
 }
-
-
-
-void *SCA_LogicManager::GetActionByName(const STR_String& actname)
-{
-	STR_HashedString an = actname;
-	void** actptr = m_mapStringToActions[an];
-
-	if (actptr)
-		return *actptr;
-
-	return NULL;
-}
-
-
-
-void* SCA_LogicManager::GetMeshByName(const STR_String& meshname)
-{
-	STR_HashedString mn = meshname;
-	void** meshptr = m_mapStringToMeshes[mn];
-
-	if (meshptr)
-		return *meshptr;
-
-	return NULL;
-}
-
-
-
-void SCA_LogicManager::RegisterMeshName(const STR_String& meshname,void* mesh)
-{
-	STR_HashedString mn = meshname;
-	m_mapStringToMeshes.insert(mn,mesh);
-}
-
-void SCA_LogicManager::UnregisterMeshName(const STR_String& meshname,void* mesh)
-{
-	STR_HashedString mn = meshname;
-	m_mapStringToMeshes.remove(mn);
-}
-
-
-void SCA_LogicManager::RegisterActionName(const STR_String& actname,void* action)
-{
-	STR_HashedString an = actname;
-	m_mapStringToActions.insert(an, action);
-}
-
 
 
 void SCA_LogicManager::EndFrame()

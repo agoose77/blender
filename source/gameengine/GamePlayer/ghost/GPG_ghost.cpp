@@ -42,6 +42,7 @@
 
 #include "KX_KetsjiEngine.h"
 #include "KX_PythonInit.h"
+#include "KX_KetsjiLogicLoop.h"
 #include "KX_PythonMain.h"
 
 /**********************************
@@ -354,6 +355,42 @@ static BlendFileData *load_game_data(const char *progname, char *filename = NULL
 	
 	return bfd;
 }
+
+
+struct KX_GhostCallbackData{
+	// BL_Embedded player data container
+	GHOST_ISystem* system;
+	GPG_Application *app;
+	KX_KetsjiEngine *ketsjiengine;
+	int *exitcode;
+	
+};
+
+
+static void GPG_EventCallback(KX_EngineCallbackData *data)
+{
+	KX_GhostCallbackData *ghost_data = (KX_GhostCallbackData*)(data->data);
+
+	GHOST_ISystem* system = ghost_data->system;
+	GPG_Application *app = ghost_data->app;
+	KX_KetsjiEngine *ketsjiengine = ghost_data->ketsjiengine;
+
+	system->processEvents(false);
+	system->dispatchEvents();
+
+	if ((*ghost_data->exitcode = app->getExitRequested())) {
+		ketsjiengine->RequestExit(KX_EXIT_REQUEST_OUTSIDE);
+	}
+}
+
+static bool GPG_RenderCallback(KX_EngineCallbackData *data)
+{
+	KX_GhostCallbackData *ghost_data = (KX_GhostCallbackData*)(data->data);
+
+	GPG_Application *app = ghost_data->app;
+	return (app->EngineRenderCallback());
+}
+
 
 static bool GPG_NextFrame(GHOST_ISystem* system, GPG_Application *app, int &exitcode, STR_String &exitstring, GlobalSettings *gs)
 {
@@ -852,6 +889,10 @@ int main(int argc, char** argv)
 				// those may change during the game and persist after using Game Actuator
 				GlobalSettings gs;
 
+				// Create callbacks for render setup and event setup pre engine
+				KX_GhostCallbackData *callback_data = new KX_GhostCallbackData();
+				KX_KetsjiEngine *ketsjiengine = app.getEngine();
+
 				do {
 					// Read the Blender file
 					BlendFileData *bfd;
@@ -1051,40 +1092,39 @@ int main(int argc, char** argv)
 						
 						// Add the application as event consumer
 						system->addEventConsumer(&app);
+						KX_EngineCallbackData *callbacks = new KX_EngineCallbackData();
 						
 						// Enter main loop
-						bool run = true;
-						char *python_main = NULL;
-						pynextframestate.state = NULL;
-						pynextframestate.func = NULL;
-#ifdef WITH_PYTHON
-						python_main = KX_GetPythonMain(scene);
-#endif // WITH_PYTHON
-						if (python_main) {
-							char *python_code = KX_GetPythonCode(maggie, python_main);
-							if (python_code) {
-#ifdef WITH_PYTHON
-								gpg_nextframestate.system = system;
-								gpg_nextframestate.app = &app;
-								gpg_nextframestate.gs = &gs;
-								pynextframestate.state = &gpg_nextframestate;
-								pynextframestate.func = &GPG_PyNextFrame;
+						
+						callbacks->eventcallback = GPG_EventCallback;
+						callbacks->rendercallback = GPG_RenderCallback;
+						callbacks->data = callback_data;
 
-								printf("Yielding control to Python script '%s'...\n", python_main);
-								PyRun_SimpleString(python_code);
-								printf("Exit Python script '%s'\n", python_main);
-#endif // WITH_PYTHON
-								MEM_freeN(python_code);
-							}
-							else {
-								fprintf(stderr, "ERROR: cannot yield control to Python: no Python text data block named '%s'\n", python_main);
-							}
-						}
-						else {
-							while (run) {
-								run = GPG_NextFrame(system, &app, exitcode, exitstring, &gs);
-							}
-						}
+						callback_data->system = system;
+						callback_data->app = &app;
+						callback_data->exitcode = &exitcode;
+						callback_data->ketsjiengine = ketsjiengine;
+
+						// Pass callbacks to refresh display, events
+						app.SetCallbacks(callbacks);
+
+						// Starting gameloop
+						printf("\nBlender Game Engine Started\n");
+
+						// Allow engine to run loop
+						KX_KetsjiLogicLoop *loop = ketsjiengine->GetLogicLoop();
+						loop->GiveHandle();
+						loop = NULL;
+
+						// Gameloop now exiting
+						printf("Blender Game Engine Finished\n");
+
+						// Get exit data
+						exitstring = ketsjiengine->GetExitString();
+						exitcode = ketsjiengine->GetExitCode();
+
+						gs = *(ketsjiengine->GetGlobalSettings());
+							
 						app.StopGameEngine();
 
 						/* 'app' is freed automatic when out of scope.
@@ -1094,7 +1134,6 @@ int main(int argc, char** argv)
 						BLO_blendfiledata_free(bfd);
 						/* G.main == bfd->main, it gets referenced in free_nodesystem so we can't have a dangling pointer */
 						G.main = NULL;
-						if (python_main) MEM_freeN(python_main);
 					}
 				} while (exitcode == KX_EXIT_REQUEST_RESTART_GAME || exitcode == KX_EXIT_REQUEST_START_OTHER_GAME);
 			}

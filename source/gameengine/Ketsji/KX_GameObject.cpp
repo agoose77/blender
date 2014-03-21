@@ -47,6 +47,7 @@ typedef unsigned long uint_ptr;
 #include "RAS_IPolygonMaterial.h"
 #include "KX_BlenderMaterial.h"
 #include "KX_GameObject.h"
+#include "KX_ResourceManager.h"
 #include "KX_Camera.h" // only for their ::Type
 #include "KX_Light.h"  // only for their ::Type
 #include "KX_FontObject.h"  // only for their ::Type
@@ -3782,7 +3783,7 @@ bool ConvertPythonToGameObject(PyObject *value, KX_GameObject **object, bool py_
 	}
 	
 	if (PyUnicode_Check(value)) {
-		*object = (KX_GameObject*)SCA_ILogicBrick::m_sCurrentLogicManager->GetGameObjectByName(STR_String( _PyUnicode_AsString(value) ));
+		*object = (KX_GameObject*)KX_GetActiveScene()->GetResourceManager()->GetGameObjectByName(STR_String( _PyUnicode_AsString(value) ));
 		
 		if (*object) {
 			return true;
