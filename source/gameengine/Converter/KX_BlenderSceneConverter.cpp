@@ -34,6 +34,7 @@
 #endif
 
 #include "KX_Scene.h"
+#include "KX_ResourceManager.h"
 #include "KX_GameObject.h"
 #include "KX_IpoConvert.h"
 #include "RAS_MeshObject.h"
@@ -1141,7 +1142,7 @@ KX_LibLoadStatus *KX_BlenderSceneConverter::LinkBlendFile(BlendHandle *bpy_openl
 			if (options & LIB_LOAD_VERBOSE)
 				printf("MeshName: %s\n", mesh->name+2);
 			RAS_MeshObject *meshobj = BL_ConvertMesh((Mesh *)mesh, NULL, scene_merge, this, false); // For now only use the libloading option for scenes, which need to handle materials/shaders
-			scene_merge->GetLogicManager()->RegisterMeshName(meshobj->GetName(),meshobj);
+			scene_merge->GetResourceManager()->RegisterMeshName(meshobj->GetName(),meshobj);
 		}
 	}
 	else if (idcode==ID_AC) {
@@ -1151,7 +1152,7 @@ KX_LibLoadStatus *KX_BlenderSceneConverter::LinkBlendFile(BlendHandle *bpy_openl
 		for (action= (ID *)main_newlib->action.first; action; action= (ID *)action->next) {
 			if (options & LIB_LOAD_VERBOSE)
 				printf("ActionName: %s\n", action->name+2);
-			scene_merge->GetLogicManager()->RegisterActionName(action->name+2, action);
+			scene_merge->GetResourceManager()->RegisterActionName(action->name+2, action);
 		}
 	}
 	else if (idcode==ID_SCE) {
@@ -1196,7 +1197,7 @@ KX_LibLoadStatus *KX_BlenderSceneConverter::LinkBlendFile(BlendHandle *bpy_openl
 			for (action= (ID *)main_newlib->action.first; action; action= (ID *)action->next) {
 				if (options & LIB_LOAD_VERBOSE)
 					printf("ActionName: %s\n", action->name+2);
-				scene_merge->GetLogicManager()->RegisterActionName(action->name+2, action);
+				scene_merge->GetResourceManager()->RegisterActionName(action->name+2, action);
 			}
 		}
 	}
@@ -1260,7 +1261,7 @@ bool KX_BlenderSceneConverter::FreeBlendFile(struct Main *maggie)
 			
 			/* in case the mesh might be refered to later */
 			{
-				CTR_Map<STR_HashedString,void*> &mapStringToMeshes = scene->GetLogicManager()->GetMeshMap();
+				CTR_Map<STR_HashedString,void*> &mapStringToMeshes = scene->GetResourceManager()->GetMeshMap();
 				
 				for (int i=0; i<mapStringToMeshes.size(); i++)
 				{
@@ -1277,7 +1278,7 @@ bool KX_BlenderSceneConverter::FreeBlendFile(struct Main *maggie)
 
 			/* Now unregister actions */
 			{
-				CTR_Map<STR_HashedString,void*> &mapStringToActions = scene->GetLogicManager()->GetActionMap();
+				CTR_Map<STR_HashedString,void*> &mapStringToActions = scene->GetResourceManager()->GetActionMap();
 
 				for (int i=0; i<mapStringToActions.size(); i++)
 				{
@@ -1603,7 +1604,7 @@ RAS_MeshObject *KX_BlenderSceneConverter::ConvertMeshSpecial(KX_Scene* kx_scene,
 	}
 	
 	RAS_MeshObject *meshobj = BL_ConvertMesh((Mesh *)me, NULL, kx_scene, this, false);
-	kx_scene->GetLogicManager()->RegisterMeshName(meshobj->GetName(),meshobj);
+	kx_scene->GetResourceManager()->RegisterMeshName(meshobj->GetName(),meshobj);
 	m_map_mesh_to_gamemesh.clear(); /* This is at runtime so no need to keep this, BL_ConvertMesh adds */
 	return meshobj;
 }

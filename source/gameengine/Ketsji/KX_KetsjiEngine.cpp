@@ -58,6 +58,7 @@
 #include "KX_PythonInit.h"
 #include "KX_PyConstraintBinding.h"
 #include "PHY_IPhysicsEnvironment.h"
+#include "KX_KetsjiLogicBrickLoop.h"
 
 #ifdef WITH_AUDASPACE
 #  include "AUD_C-API.h"
@@ -102,14 +103,15 @@ const char KX_KetsjiEngine::m_profileLabels[tc_numCategories][15] = {
 	"GPU Latency:"	// tc_latency
 };
 
-double KX_KetsjiEngine::m_ticrate = DEFAULT_LOGIC_TIC_RATE;
-int	   KX_KetsjiEngine::m_maxLogicFrame = 5;
-int	   KX_KetsjiEngine::m_maxPhysicsFrame = 5;
 double KX_KetsjiEngine::m_anim_framerate = 25.0;
+double KX_KetsjiEngine::m_average_framerate = 0.0;
 double KX_KetsjiEngine::m_suspendedtime = 0.0;
 double KX_KetsjiEngine::m_suspendeddelta = 0.0;
-double KX_KetsjiEngine::m_average_framerate = 0.0;
+double KX_KetsjiEngine::m_ticrate = DEFAULT_LOGIC_TIC_RATE;
 bool   KX_KetsjiEngine::m_restrict_anim_fps = false;
+bool   KX_KetsjiEngine::m_bFixedTime = false;
+int	   KX_KetsjiEngine::m_maxLogicFrame = 5;
+int	   KX_KetsjiEngine::m_maxPhysicsFrame = 5;
 short  KX_KetsjiEngine::m_exitkey = 130; //ESC Key
 
 
@@ -130,7 +132,6 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 
 	m_bInitialized(false),
 	m_activecam(0),
-	m_bFixedTime(false),
 	
 	m_firstframe(true),
 	
@@ -155,6 +156,8 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 	m_curreye(0),
 
 	m_logger(NULL),
+ 	m_logicloop(NULL),
+ 	m_logiccallbacks(NULL),
 	
 	// Set up timing info display variables
 	m_show_framerate(false),
@@ -177,6 +180,7 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 {
 	// Initialize the time logger
 	m_logger = new KX_TimeCategoryLogger (25);
+	m_logicloop = new KX_KetsjiLogicBrickLoop (this);
 
 	for (int i = tc_first; i < tc_numCategories; i++)
 		m_logger->AddCategory((KX_TimeCategory)i);
@@ -194,6 +198,12 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 KX_KetsjiEngine::~KX_KetsjiEngine()
 {
 	delete m_logger;
+ 	delete m_logicloop;
+ 	delete m_keyboarddevice;
+ 	delete m_mousedevice;
+ 	delete m_rasterizer;
+ 	delete m_networkdevice;
+ 	delete m_kxsystem;
 	if (m_usedome)
 		delete m_dome;
 
@@ -208,6 +218,21 @@ void KX_KetsjiEngine::SetKeyboardDevice(SCA_IInputDevice* keyboarddevice)
 {
 	MT_assert(keyboarddevice);
 	m_keyboarddevice = keyboarddevice;
+}
+
+
+
+void KX_KetsjiEngine::SetEngineCallbacks(KX_EngineCallbackData *callbacks)
+{
+	m_logiccallbacks = callbacks;
+}
+
+
+
+void KX_KetsjiEngine::SetLogger(KX_TimeCategoryLogger* logger)
+{
+ 	MT_assert(logger);
+ 	m_logger = logger;
 }
 
 
@@ -232,7 +257,6 @@ void KX_KetsjiEngine::SetCanvas(RAS_ICanvas* canvas)
 	MT_assert(canvas);
 	m_canvas = canvas;
 }
-
 
 
 void KX_KetsjiEngine::SetRasterizer(RAS_IRasterizer* rasterizer)
@@ -265,6 +289,23 @@ void KX_KetsjiEngine::SetSceneConverter(KX_ISceneConverter* sceneconverter)
 	MT_assert(sceneconverter);
 	m_sceneconverter = sceneconverter;
 }
+
+
+void KX_KetsjiEngine::SetLogicLoop(KX_KetsjiLogicLoop* logicloop)
+{
+	// Get existing loop and delete it
+	KX_KetsjiLogicLoop *old_loop = m_logicloop;
+
+	if (old_loop)
+	{
+		delete old_loop;
+		old_loop = NULL;
+	}
+
+	MT_assert(logicloop);
+	m_logicloop = logicloop;
+}
+
 
 void KX_KetsjiEngine::InitDome(short res, short mode, short angle, float resbuf, short tilt, struct Text* text)
 {
@@ -541,284 +582,18 @@ void KX_KetsjiEngine::EndFrame()
 //#include "PIL_time.h"
 //#include "LinearMath/btQuickprof.h"
 
-
-bool KX_KetsjiEngine::NextFrame()
+void KX_KetsjiEngine::UpdateEvents()
 {
-	double timestep = 1.0/m_ticrate;
-	double framestep = timestep;
-	//	static hidden::Clock sClock;
-
-	m_logger->StartLog(tc_services, m_kxsystem->GetTimeInSeconds(),true);
-
-	//float dt = sClock.getTimeMicroseconds() * 0.000001f;
-	//sClock.reset();
-
-	if (m_bFixedTime) {
-		m_clockTime += timestep;
-	}
-	else {
-		// m_clockTime += dt;
-		m_clockTime = m_kxsystem->GetTimeInSeconds();
-	}
-	
-	double deltatime = m_clockTime - m_frameTime;
-	if (deltatime<0.f)
-	{
-		// We got here too quickly, which means there is nothing todo, just return and don't render.
-		// Not sure if this is the best fix, but it seems to stop the jumping framerate issue (#33088)
-		return false;
-	}
-
-
-	// Compute the number of logic frames to do each update (fixed tic bricks)
-	int frames =int(deltatime*m_ticrate+1e-6);
-//	if (frames>1)
-//		printf("****************************************");
-//	printf("dt = %f, deltatime = %f, frames = %d\n",dt, deltatime,frames);
-	
-//	if (!frames)
-//		PIL_sleep_ms(1);
-	
-	KX_SceneList::iterator sceneit;
-	
-	if (frames>m_maxPhysicsFrame)
-	{
-	
-	//	printf("framedOut: %d\n",frames);
-		m_frameTime+=(frames-m_maxPhysicsFrame)*timestep;
-		frames = m_maxPhysicsFrame;
-	}
-	
-
-	bool doRender = frames>0;
-
-	if (frames > m_maxLogicFrame)
-	{
-		framestep = (frames*timestep)/m_maxLogicFrame;
-		frames = m_maxLogicFrame;
-	}
-
-	while (frames)
-	{
-	
-
-		m_frameTime += framestep;
-		
-		m_sceneconverter->MergeAsyncLoads();
-
-		for (sceneit = m_scenes.begin();sceneit != m_scenes.end(); ++sceneit)
-		// for each scene, call the proceed functions
-		{
-			KX_Scene* scene = *sceneit;
-	
-			/* Suspension holds the physics and logic processing for an
-			 * entire scene. Objects can be suspended individually, and
-			 * the settings for that precede the logic and physics
-			 * update. */
-			m_logger->StartLog(tc_logic, m_kxsystem->GetTimeInSeconds(), true);
-
-			m_sceneconverter->resetNoneDynamicObjectToIpo();//this is for none dynamic objects with ipo
-
-			scene->UpdateObjectActivity();
-	
-			if (!scene->IsSuspended())
-			{
-				// if the scene was suspended recalcutlate the delta tu "curtime"
-				m_suspendedtime = scene->getSuspendedTime();
-				if (scene->getSuspendedTime()!=0.0)
-					scene->setSuspendedDelta(scene->getSuspendedDelta()+m_clockTime-scene->getSuspendedTime());
-				m_suspendeddelta = scene->getSuspendedDelta();
-
-				
-				m_logger->StartLog(tc_network, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_NETWORK);
-				scene->GetNetworkScene()->proceed(m_frameTime);
-	
-				//m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				//SG_SetActiveStage(SG_STAGE_NETWORK_UPDATE);
-				//scene->UpdateParents(m_frameTime);
-				
-				m_logger->StartLog(tc_physics, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_PHYSICS1);
-				// set Python hooks for each scene
-#ifdef WITH_PYTHON
-				PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
-#endif
-				KX_SetActiveScene(scene);
-	
-				scene->GetPhysicsEnvironment()->EndFrame();
-				
-				// Update scenegraph after physics step. This maps physics calculations
-				// into node positions.
-				//m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				//SG_SetActiveStage(SG_STAGE_PHYSICS1_UPDATE);
-				//scene->UpdateParents(m_frameTime);
-				
-				// Process sensors, and controllers
-				m_logger->StartLog(tc_logic, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_CONTROLLER);
-				scene->LogicBeginFrame(m_frameTime);
-	
-				// Scenegraph needs to be updated again, because Logic Controllers 
-				// can affect the local matrices.
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_CONTROLLER_UPDATE);
-				scene->UpdateParents(m_frameTime);
-	
-				// Process actuators
-	
-				// Do some cleanup work for this logic frame
-				m_logger->StartLog(tc_logic, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_ACTUATOR);
-				scene->LogicUpdateFrame(m_frameTime, true);
-				
-				scene->LogicEndFrame();
-	
-				// Actuators can affect the scenegraph
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_ACTUATOR_UPDATE);
-				scene->UpdateParents(m_frameTime);
-
-				if (!GetRestrictAnimationFPS())
-				{
-					m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
-					SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-					scene->UpdateAnimations(m_frameTime);
-				}
-
-				m_logger->StartLog(tc_physics, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_PHYSICS2);
-				scene->GetPhysicsEnvironment()->BeginFrame();
-		
-				// Perform physics calculations on the scene. This can involve 
-				// many iterations of the physics solver.
-				scene->GetPhysicsEnvironment()->ProceedDeltaTime(m_frameTime,timestep,framestep);//m_deltatimerealDeltaTime);
-
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_PHYSICS2_UPDATE);
-				scene->UpdateParents(m_frameTime);
-			
-			
-				if (m_animation_record)
-				{
-					m_sceneconverter->WritePhysicsObjectToAnimationIpo(++m_currentFrame);
-				}
-
-				scene->setSuspendedTime(0.0);
-			} // suspended
-			else
-				if (scene->getSuspendedTime()==0.0)
-					scene->setSuspendedTime(m_clockTime);
-			
-			m_logger->StartLog(tc_services, m_kxsystem->GetTimeInSeconds(), true);
-		}
-
-		// update system devices
-		m_logger->StartLog(tc_logic, m_kxsystem->GetTimeInSeconds(), true);
-		if (m_keyboarddevice)
-			m_keyboarddevice->NextFrame();
-	
-		if (m_mousedevice)
-			m_mousedevice->NextFrame();
-		
-		if (m_networkdevice)
-			m_networkdevice->NextFrame();
-
-		// scene management
-		ProcessScheduledScenes();
-		
-		frames--;
-	}
-
-	bool bUseAsyncLogicBricks= false;//true;
-
-	if (bUseAsyncLogicBricks)
-	{
-		// Logic update sub frame: this will let some logic bricks run at the
-		// full frame rate.
-		for (sceneit = m_scenes.begin();sceneit != m_scenes.end(); ++sceneit)
-		// for each scene, call the proceed functions
-		{
-			KX_Scene* scene = *sceneit;
-
-			if (!scene->IsSuspended())
-			{
-				// if the scene was suspended recalcutlate the delta tu "curtime"
-				m_suspendedtime = scene->getSuspendedTime();
-				if (scene->getSuspendedTime()!=0.0)
-					scene->setSuspendedDelta(scene->getSuspendedDelta()+m_clockTime-scene->getSuspendedTime());
-				m_suspendeddelta = scene->getSuspendedDelta();
-				
-				// set Python hooks for each scene
-#ifdef WITH_PYTHON
-				PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
-#endif
-				KX_SetActiveScene(scene);
-				
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_PHYSICS1);
-				scene->UpdateParents(m_clockTime);
-
-				// Perform physics calculations on the scene. This can involve 
-				// many iterations of the physics solver.
-				m_logger->StartLog(tc_physics, m_kxsystem->GetTimeInSeconds(), true);
-				scene->GetPhysicsEnvironment()->ProceedDeltaTime(m_clockTime,timestep,timestep);
-				// Update scenegraph after physics step. This maps physics calculations
-				// into node positions.
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_PHYSICS2);
-				scene->UpdateParents(m_clockTime);
-				
-				// Do some cleanup work for this logic frame
-				m_logger->StartLog(tc_logic, m_kxsystem->GetTimeInSeconds(), true);
-				scene->LogicUpdateFrame(m_clockTime, false);
-
-				// Actuators can affect the scenegraph
-				m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
-				SG_SetActiveStage(SG_STAGE_ACTUATOR);
-				scene->UpdateParents(m_clockTime);
-
-				scene->setSuspendedTime(0.0);
-			} // suspended
-			else
-				if (scene->getSuspendedTime()==0.0)
-					scene->setSuspendedTime(m_clockTime);
-
-			m_logger->StartLog(tc_services, m_kxsystem->GetTimeInSeconds(), true);
-		}
-	}
-
-		
-	// Handle the animations independently of the logic time step
-	if (GetRestrictAnimationFPS())
-	{
-		double clocktime = m_kxsystem->GetTimeInSeconds();
-		m_logger->StartLog(tc_animations, clocktime, true);
-		SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-
-		double anim_timestep = 1.0/KX_GetActiveScene()->GetAnimationFPS();
-		if (clocktime - m_previousAnimTime > anim_timestep)
-		{
-			// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
-			// printf("Anim fps: %f\n", 1.0/(m_clockTime - m_previousAnimTime));
-			m_previousAnimTime = clocktime;
-			for (sceneit = m_scenes.begin();sceneit != m_scenes.end(); ++sceneit)
-			{
-				(*sceneit)->UpdateAnimations(clocktime);
-			}
-		}
-	}
-	
-	// Start logging time spend outside main loop
-	m_logger->StartLog(tc_outside, m_kxsystem->GetTimeInSeconds(), true);
-	
-	return doRender;
+	m_logiccallbacks->eventcallback(m_logiccallbacks);
 }
-
-
-
+  	
 void KX_KetsjiEngine::Render()
 {
+	// Allow callbacks to prevent rendering
+	bool can_render = m_logiccallbacks->rendercallback(m_logiccallbacks);
+	if (!can_render)
+		return;
+
 	if (m_usedome) {
 		RenderDome();
 		return;
@@ -1806,25 +1581,55 @@ void KX_KetsjiEngine::SetUseFixedTime(bool bUseFixedTime)
 }
 
 
-void	KX_KetsjiEngine::SetAnimRecordMode(bool animation_record, int startFrame)
+bool KX_KetsjiEngine::GetAnimationRecord()
+{
+	return m_animation_record;
+}
+
+int KX_KetsjiEngine::GetAnimationFrame()
+{
+	return m_currentFrame;
+}
+
+void KX_KetsjiEngine::SetAnimationFrame(int frame)
+{
+	m_currentFrame = frame;
+}
+
+void KX_KetsjiEngine::SetAnimRecordMode(bool animation_record)
 {
 	m_animation_record = animation_record;
+
 	if (animation_record)
 	{
 		//when recording physics keyframes, run at a variable (capped) frame rate (fixed time == full speed)
 		m_bFixedTime = false;
 	}
-	m_currentFrame = startFrame;
 }
 
-bool KX_KetsjiEngine::GetUseFixedTime(void) const
+bool KX_KetsjiEngine::GetUseFixedTime() 
 {
 	return m_bFixedTime;
 }
 
+void KX_KetsjiEngine::SetSuspendedTime(double time)
+{
+	m_suspendedtime = time;
+}
+
+void KX_KetsjiEngine::SetSuspendedDelta(double time)
+{
+	m_suspendeddelta = time;
+}
+ 
 double KX_KetsjiEngine::GetSuspendedDelta()
 {
 	return m_suspendeddelta;
+}
+
+double KX_KetsjiEngine::GetSuspendedTime()
+{
+	return m_suspendedtime;
 }
 
 double KX_KetsjiEngine::GetTicRate()
@@ -1875,6 +1680,16 @@ double KX_KetsjiEngine::GetAnimFrameRate()
 double KX_KetsjiEngine::GetClockTime(void) const
 {
 	return m_clockTime;
+}
+
+void KX_KetsjiEngine::SetClockTime(double time)
+{
+	m_clockTime = time;
+}
+
+void KX_KetsjiEngine::SetFrameTime(double time)
+{
+	m_frameTime = time;
 }
 
 double KX_KetsjiEngine::GetFrameTime(void) const

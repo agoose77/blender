@@ -81,14 +81,6 @@ class SCA_LogicManager
 	//           element: SCA_IObject::m_activeControllers
 	SG_DList							m_triggeredControllerSet;
 
-	// need to find better way for this
-	// also known as FactoryManager...
-	CTR_Map<STR_HashedString,CValue*>	m_mapStringToGameObjects;
-	CTR_Map<STR_HashedString,void*>		m_mapStringToMeshes;
-	CTR_Map<STR_HashedString,void*>		m_mapStringToActions;
-
-	CTR_Map<STR_HashedString,void*>		m_map_gamemeshname_to_blendobj;
-	CTR_Map<CHashedPtr,void*>			m_map_blendobj_to_gameobj;
 public:
 	SCA_LogicManager();
 	virtual ~SCA_LogicManager();
@@ -113,8 +105,6 @@ public:
 	void	AddTriggeredController(SCA_IController* controller, SCA_ISensor* sensor);
 	SCA_EventManager*	FindEventManager(int eventmgrtype);
 	vector<class SCA_EventManager*>	GetEventManagers() { return m_eventmanagers; }
-	
-	void	RemoveGameObject(const STR_String& gameobjname);
 
 	/**
 	 * remove Logic Bricks from the running logicmanager
@@ -122,29 +112,6 @@ public:
 	void	RemoveSensor(SCA_ISensor* sensor);
 	void	RemoveController(SCA_IController* controller);
 	void	RemoveActuator(SCA_IActuator* actuator);
-	
-
-	// for the scripting... needs a FactoryManager later (if we would have time... ;)
-	void	RegisterMeshName(const STR_String& meshname,void* mesh);
-	void	UnregisterMeshName(const STR_String& meshname,void* mesh);
-	CTR_Map<STR_HashedString,void*>&	GetMeshMap() { return m_mapStringToMeshes; }
-	CTR_Map<STR_HashedString,void*>&	GetActionMap() { return m_mapStringToActions; }
-	
-	void	RegisterActionName(const STR_String& actname,void* action);
-
-	void*	GetActionByName (const STR_String& actname);
-	void*	GetMeshByName(const STR_String& meshname);
-
-	void	RegisterGameObjectName(const STR_String& gameobjname,CValue* gameobj);
-	class CValue*	GetGameObjectByName(const STR_String& gameobjname);
-
-	void	RegisterGameMeshName(const STR_String& gamemeshname, void* blendobj);
-	void*	FindBlendObjByGameMeshName(const STR_String& gamemeshname);
-
-	void	RegisterGameObj(void* blendobj, CValue* gameobj);
-	void	UnregisterGameObj(void* blendobj, CValue* gameobj);
-	CValue*	FindGameObjByBlendObj(void* blendobj);
-	
 	
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:SCA_LogicManager")

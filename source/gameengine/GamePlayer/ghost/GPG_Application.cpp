@@ -42,6 +42,8 @@
 #include "GPG_Application.h"
 #include "BL_BlenderDataConversion.h"
 
+#include "KX_KetsjiSetupTools.h"
+
 #include <iostream>
 #include <MT_assert.h>
 #include <stdlib.h>
@@ -519,6 +521,10 @@ bool GPG_Application::processEvent(GHOST_IEvent* event)
 	return handled;
 }
 
+void GPG_Application::SetCallbacks(KX_EngineCallbackData *callbacks)
+{
+	m_ketsjiengine->SetEngineCallbacks(callbacks);
+}
 
 
 int GPG_Application::getExitRequested(void)
@@ -556,47 +562,34 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		// SYS_WriteCommandLineInt(syshandle, "fixedtime", 0);
 		// SYS_WriteCommandLineInt(syshandle, "vertexarrays",1);
 		GameData *gm= &m_startScene->gm;
-		bool properties	= (SYS_GetCommandLineInt(syshandle, "show_properties", 0) != 0);
-		bool profile = (SYS_GetCommandLineInt(syshandle, "show_profile", 0) != 0);
+		
+		// Create callbacks for render setup and event setup pre engine
+		KX_EngineCallbackData *callbacks = new KX_EngineCallbackData();
+
+		// User defined Python gameloop path
+		char *custom_loop = gm->custom_loop;
 
 		bool showPhysics = (gm->flag & GAME_SHOW_PHYSICS);
 		SYS_WriteCommandLineInt(syshandle, "show_physics", showPhysics);
 
-		bool fixed_framerate= (SYS_GetCommandLineInt(syshandle, "fixedtime", (gm->flag & GAME_ENABLE_ALL_FRAMES)) != 0);
-		bool frameRate = (SYS_GetCommandLineInt(syshandle, "show_framerate", 0) != 0);
-		bool useLists = (SYS_GetCommandLineInt(syshandle, "displaylists", gm->flag & GAME_DISPLAY_LISTS) != 0) && GPU_display_list_support();
-		bool nodepwarnings = (SYS_GetCommandLineInt(syshandle, "ignore_deprecation_warnings", 1) != 0);
-		bool restrictAnimFPS = gm->flag & GAME_RESTRICT_ANIM_UPDATES;
+		// TODO material stuff
+		if (true){
 
-		if (GLEW_ARB_multitexture && GLEW_VERSION_1_1)
-			m_blendermat = (SYS_GetCommandLineInt(syshandle, "blender_material", 1) != 0);
-
-		if (GPU_glsl_support())
-			m_blenderglslmat = (SYS_GetCommandLineInt(syshandle, "blender_glsl_material", 1) != 0);
-		else if (m_globalSettings->matmode == GAME_MAT_GLSL)
-			m_blendermat = false;
+			if (GLEW_ARB_multitexture && GLEW_VERSION_1_1)
+				m_blendermat = (SYS_GetCommandLineInt(syshandle, "blender_material", 1) != 0);
+			if (GPU_glsl_support())
+				m_blenderglslmat = (SYS_GetCommandLineInt(syshandle, "blender_glsl_material", 1) != 0);
+			else if (m_globalSettings->matmode == GAME_MAT_GLSL)
+				m_blendermat = false;
+		}
 
 		// create the canvas, rasterizer and rendertools
 		m_canvas = new GPG_Canvas(window);
 		if (!m_canvas)
 			return false;
 
-		if (gm->vsync == VSYNC_ADAPTIVE)
-			m_canvas->SetSwapInterval(-1);
-		else
-			m_canvas->SetSwapInterval((gm->vsync == VSYNC_ON) ? 1 : 0);
-
 		m_canvas->Init();
-		if (gm->flag & GAME_SHOW_MOUSE)
-			m_canvas->SetMouseState(RAS_ICanvas::MOUSE_NORMAL);
 		
-		//Don't use displaylists with VBOs
-		//If auto starts using VBOs, make sure to check for that here
-		if (useLists && gm->raster_storage != RAS_STORE_VBO)
-			m_rasterizer = new RAS_ListRasterizer(m_canvas, false, gm->raster_storage);
-		else
-			m_rasterizer = new RAS_OpenGLRasterizer(m_canvas, gm->raster_storage);
-
 		/* Stereo parameters - Eye Separation from the UI - stereomode from the command-line/UI */
 		m_rasterizer->SetStereoMode((RAS_IRasterizer::StereoMode) stereoMode);
 		m_rasterizer->SetEyeSeparation(m_startScene->gm.eyeseparation);
@@ -624,35 +617,17 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		m_kxsystem = new GPG_System (m_system);
 		if (!m_kxsystem)
 			goto initFailed;
+
+		// Initialise KX_KetsjiEngine
+		m_ketsjiengine = setupKetsjiEngine(m_startScene, m_canvas, m_globalSettings, m_keyboard, m_mouse,
+						m_networkdevice, m_kxsystem);
 		
-		// create the ketsjiengine
-		m_ketsjiengine = new KX_KetsjiEngine(m_kxsystem);
-		
-		// set the devices
-		m_ketsjiengine->SetKeyboardDevice(m_keyboard);
-		m_ketsjiengine->SetMouseDevice(m_mouse);
-		m_ketsjiengine->SetNetworkDevice(m_networkdevice);
-		m_ketsjiengine->SetCanvas(m_canvas);
-		m_ketsjiengine->SetRasterizer(m_rasterizer);
-
-		KX_KetsjiEngine::SetExitKey(ConvertKeyCode(gm->exitkey));
-#ifdef WITH_PYTHON
-		CValue::SetDeprecationWarnings(nodepwarnings);
-#else
-		(void)nodepwarnings;
-#endif
-
-		m_ketsjiengine->SetUseFixedTime(fixed_framerate);
-		m_ketsjiengine->SetTimingDisplay(frameRate, profile, properties);
-		m_ketsjiengine->SetRestrictAnimationFPS(restrictAnimFPS);
-
-		//set the global settings (carried over if restart/load new files)
-		m_ketsjiengine->SetGlobalSettings(m_globalSettings);
-
+		// create the ketsjiengine	
 		m_engineInitialized = true;
 	}
 
 	return m_engineInitialized;
+
 initFailed:
 	sound_exit();
 	delete m_kxsystem;
@@ -800,6 +775,16 @@ void GPG_Application::stopEngine()
 	m_engineRunning = false;
 }
 
+bool GPG_Application::EngineRenderCallback()
+{
+	if (!m_kxsystem || !m_mainWindow)
+		return false;
+
+	// Proceed to next frame
+	m_mainWindow->activateDrawingContext();
+	return true;
+}
+
 void GPG_Application::EngineNextFrame()
 {
 	// Update the state of the game engine
@@ -813,12 +798,12 @@ void GPG_Application::EngineNextFrame()
 		m_exitRequested = m_ketsjiengine->GetExitCode();
 		
 		// kick the engine
-		bool renderFrame = m_ketsjiengine->NextFrame();
-		if (renderFrame && m_mainWindow)
-		{
+		//bool renderFrame = m_ketsjiengine->NextFrame();
+		//if (renderFrame && m_mainWindow)
+		//{
 			// render the frame
-			m_ketsjiengine->Render();
-		}
+		//	m_ketsjiengine->Render();
+		//}
 	}
 	m_exitString = m_ketsjiengine->GetExitString();
 }

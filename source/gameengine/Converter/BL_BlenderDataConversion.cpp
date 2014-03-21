@@ -64,6 +64,7 @@
 #include "PHY_Pro.h"
 
 
+#include "KX_ResourceManager.h"
 #include "KX_Scene.h"
 #include "KX_GameObject.h"
 #include "RAS_FramingManager.h"
@@ -1866,7 +1867,7 @@ static KX_GameObject *gameobject_from_blenderobject(
 		RAS_MeshObject* meshobj = BL_ConvertMesh(mesh,ob,kxscene,converter, libloading);
 		
 		// needed for python scripting
-		kxscene->GetLogicManager()->RegisterMeshName(meshobj->GetName(),meshobj);
+		kxscene->GetResourceManager()->RegisterMeshName(meshobj->GetName(),meshobj);
 
 		if (ob->gameflag & OB_NAVMESH)
 		{
@@ -2110,6 +2111,7 @@ static void bl_ConvertBlenderObject_Single(
         CListValue* objectlist, CListValue* inactivelist, CListValue*	sumolist,
         KX_Scene* kxscene, KX_GameObject* gameobj,
         SCA_LogicManager* logicmgr, SCA_TimeEventManager* timemgr,
+		KX_ResourceManager* resourcemgr,
         bool isInActiveLayer
         )
 {
@@ -2217,12 +2219,12 @@ static void bl_ConvertBlenderObject_Single(
 	}
 
 	// needed for python scripting
-	logicmgr->RegisterGameObjectName(gameobj->GetName(),gameobj);
+	resourcemgr->RegisterGameObjectName(gameobj->GetName(),gameobj);
 
 	// needed for group duplication
-	logicmgr->RegisterGameObj(blenderobject, gameobj);
+	resourcemgr->RegisterGameObj(blenderobject, gameobj);
 	for (int i = 0; i < gameobj->GetMeshCount(); i++)
-		logicmgr->RegisterGameMeshName(gameobj->GetMesh(i)->GetName(), blenderobject);
+		resourcemgr->RegisterGameMeshName(gameobj->GetMesh(i)->GetName(), blenderobject);
 
 	converter->RegisterGameObject(gameobj, blenderobject);
 	// this was put in rapidly, needs to be looked at more closely
@@ -2279,6 +2281,7 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 	                               objectlist, inactivelist, sumolist, \
 	                               kxscene, gameobj,                   \
 	                               logicmgr, timemgr,                  \
+								   resourcemgr,						   \
 	                               isInActiveLayer                     \
 	                               )
 
@@ -2354,6 +2357,7 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 	
 	SCA_LogicManager* logicmgr = kxscene->GetLogicManager();
 	SCA_TimeEventManager* timemgr = kxscene->GetTimeEventManager();
+	KX_ResourceManager* resourcemgr = kxscene->GetResourceManager();
 	
 	CListValue* logicbrick_conversionlist = new CListValue();
 	
@@ -2363,7 +2367,7 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 	bAction *curAct;
 	for (curAct = (bAction*)maggie->action.first; curAct; curAct=(bAction*)curAct->id.next)
 	{
-		logicmgr->RegisterActionName(curAct->id.name + 2, curAct);
+		resourcemgr->RegisterActionName(curAct->id.name + 2, curAct);
 	}
 
 	SetDefaultLightMode(blenderscene);

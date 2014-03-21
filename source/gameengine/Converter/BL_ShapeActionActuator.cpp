@@ -32,7 +32,8 @@
 
 #include <cmath>
 
-#include "SCA_LogicManager.h"
+#include "KX_ResourceManager.h"
+#include "KX_PythonInit.h"
 #include "BL_ShapeActionActuator.h"
 #include "BL_ShapeDeformer.h"
 #include "KX_GameObject.h"
@@ -547,7 +548,7 @@ int BL_ShapeActionActuator::pyattr_set_action(void *self_v, const KX_PYATTRIBUTE
 	
 	if (val != "")
 	{
-		action= (bAction*)SCA_ILogicBrick::m_sCurrentLogicManager->GetActionByName(val);
+		action= (bAction*)KX_GetActiveScene()->GetResourceManager()->GetActionByName(val);
 		if (action==NULL)
 		{
 			PyErr_SetString(PyExc_ValueError, "actuator.action = val: Shape Action Actuator, action not found!");

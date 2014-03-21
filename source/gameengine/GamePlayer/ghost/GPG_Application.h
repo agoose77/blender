@@ -84,7 +84,10 @@ public:
 	const STR_String& getExitString(void);
 	GlobalSettings* getGlobalSettings(void);
 	bool StartGameEngine(int stereoMode);
+	void SetCallbacks(KX_EngineCallbackData *callbacks);
+	bool EngineRenderCallback();
 	void StopGameEngine();
+	KX_KetsjiEngine *getEngine(){return m_ketsjiengine;};
 	void EngineNextFrame();
 
 protected:
