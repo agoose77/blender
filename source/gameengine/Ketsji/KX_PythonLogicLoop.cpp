@@ -204,11 +204,11 @@ PyObject *KX_PythonLogicLoop::PyCheckQuit()
 // Updates physics
 PyObject *KX_PythonLogicLoop::PyUpdatePhysics(PyObject *args)
 {
-	double current_time, deltatime;
+	double current_time, fixed_step_time, delta_time;
 
-	if (PyArg_ParseTuple(args, "dd:update_physics",  &current_time, &deltatime))
+	if (PyArg_ParseTuple(args, "ddd:update_physics", &current_time, &fixed_step_time, &delta_time))
 	{
-		this->UpdatePhysics(current_time, deltatime);
+		this->UpdatePhysics(current_time, fixed_step_time, delta_time);
 		Py_RETURN_NONE;
 	}
 	return NULL;
