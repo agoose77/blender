@@ -521,11 +521,6 @@ bool GPG_Application::processEvent(GHOST_IEvent* event)
 	return handled;
 }
 
-void GPG_Application::SetCallbacks(KX_EngineCallbackData *callbacks)
-{
-	m_ketsjiengine->SetEngineCallbacks(callbacks);
-}
-
 
 int GPG_Application::getExitRequested(void)
 {

@@ -1086,7 +1086,7 @@ int main(int argc, char** argv)
 						callback_data->ketsjiengine = ketsjiengine;
 
 						// Pass callbacks to refresh display, events
-						app.SetCallbacks(callbacks);
+						ketsjiengine->SetEngineCallbacks(callbacks);
 
 						// Starting gameloop
 						printf("\nBlender Game Engine Started\n");
