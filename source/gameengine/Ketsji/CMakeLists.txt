@@ -86,6 +86,9 @@ set(SRC
 	KX_IPO_SGController.cpp
 	KX_IpoActuator.cpp
 	KX_KetsjiEngine.cpp
+	KX_KetsjiLogicLoop.cpp
+	KX_KetsjiLogicBrickLoop.cpp
+	KX_KetsjiSetupTools.cpp
 	KX_Light.cpp
 	KX_LightIpoSGController.cpp
 	KX_MaterialIpoController.cpp
@@ -108,10 +111,12 @@ set(SRC
 	KX_PythonInitTypes.cpp
 	KX_PythonMain.cpp
 	KX_PythonSeq.cpp
+	KX_PythonLogicLoop.cpp
 	KX_RadarSensor.cpp
 	KX_RayCast.cpp
 	KX_RayEventManager.cpp
 	KX_RaySensor.cpp
+	KX_ResourceManager.cpp
 	KX_SCA_AddObjectActuator.cpp
 	KX_SCA_DynamicActuator.cpp
 	KX_SCA_EndObjectActuator.cpp
