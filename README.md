@@ -15,5 +15,4 @@ Deliverables:
 - Python Collision API for Bullet (callbacks, contacts, modify existing logic bricks).
 - Python Physics API (for physics type and other data)
 - Update of Python API to provide properties instead of get/set methods, rename bge.logic to bge.engine, rename of methods to more pythonic names.
-- Complete separation of SCA systems from KX design, which would remove KX_GameObject.sensors, ..., 
-- Investigate component-esque architecture for scene.physics, object.physics, object.logic.
+- Investigate component-esque architecture for scene.physics, object.physics, object.logic, removing / movingcertain functionality such as KX_GameObject.sensors, ..., 
