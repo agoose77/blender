@@ -562,12 +562,6 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		// SYS_WriteCommandLineInt(syshandle, "fixedtime", 0);
 		// SYS_WriteCommandLineInt(syshandle, "vertexarrays",1);
 		GameData *gm= &m_startScene->gm;
-		
-		// Create callbacks for render setup and event setup pre engine
-		KX_EngineCallbackData *callbacks = new KX_EngineCallbackData();
-
-		// User defined Python gameloop path
-		char *custom_loop = gm->custom_loop;
 
 		bool showPhysics = (gm->flag & GAME_SHOW_PHYSICS);
 		SYS_WriteCommandLineInt(syshandle, "show_physics", showPhysics);
@@ -589,13 +583,6 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 			return false;
 
 		m_canvas->Init();
-		
-		/* Stereo parameters - Eye Separation from the UI - stereomode from the command-line/UI */
-		m_rasterizer->SetStereoMode((RAS_IRasterizer::StereoMode) stereoMode);
-		m_rasterizer->SetEyeSeparation(m_startScene->gm.eyeseparation);
-		
-		if (!m_rasterizer)
-			goto initFailed;
 						
 		// create the inputdevices
 		m_keyboard = new GPG_KeyboardDevice();
@@ -620,7 +607,16 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 
 		// Initialise KX_KetsjiEngine
 		m_ketsjiengine = setupKetsjiEngine(m_startScene, m_canvas, m_globalSettings, m_keyboard, m_mouse,
-						m_networkdevice, m_kxsystem);
+											m_networkdevice, m_kxsystem);
+
+		m_rasterizer = m_ketsjiengine->GetRasterizer();
+
+		/* Stereo parameters - Eye Separation from the UI - stereomode from the command-line/UI */
+		m_rasterizer->SetStereoMode((RAS_IRasterizer::StereoMode) stereoMode);
+		m_rasterizer->SetEyeSeparation(m_startScene->gm.eyeseparation);
+
+		if (!m_rasterizer)
+			goto initFailed;
 		
 		// create the ketsjiengine	
 		m_engineInitialized = true;
@@ -819,37 +815,32 @@ void GPG_Application::exitEngine()
 	{
 		stopEngine();
 		delete m_ketsjiengine;
-		m_ketsjiengine = 0;
+		m_ketsjiengine = NULL;
 	}
 	if (m_kxsystem)
 	{
-		delete m_kxsystem;
-		m_kxsystem = 0;
-	}
-	if (m_networkdevice)
-	{
-		delete m_networkdevice;
-		m_networkdevice = 0;
-	}
-	if (m_mouse)
-	{
-		delete m_mouse;
-		m_mouse = 0;
-	}
-	if (m_keyboard)
-	{
-		delete m_keyboard;
-		m_keyboard = 0;
-	}
-	if (m_rasterizer)
-	{
-		delete m_rasterizer;
-		m_rasterizer = 0;
+		m_kxsystem = NULL;
 	}
 	if (m_canvas)
 	{
 		delete m_canvas;
-		m_canvas = 0;
+		m_canvas = NULL;
+	}
+	if (m_networkdevice)
+	{
+		m_networkdevice = NULL;
+	}
+	if (m_mouse)
+	{
+		m_mouse = NULL;
+	}
+	if (m_keyboard)
+	{
+		m_keyboard = NULL;
+	}
+	if (m_rasterizer)
+	{
+		m_rasterizer = NULL;
 	}
 
 	GPU_extensions_exit();

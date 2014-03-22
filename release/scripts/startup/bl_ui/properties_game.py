@@ -429,6 +429,9 @@ class RENDER_PT_game_system(RenderButtonsPanel, Panel):
         row.label("Exit Key")
         row.prop(gs, "exit_key", text="", event=True)
 
+        row = layout.row()
+        row.prop(gs, "custom_loop")
+
 
 class RENDER_PT_game_display(RenderButtonsPanel, Panel):
     bl_label = "Display"

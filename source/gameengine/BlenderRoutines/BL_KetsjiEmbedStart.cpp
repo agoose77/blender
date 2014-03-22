@@ -281,10 +281,11 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 
 	callbacks->rendercallback = KX_RenderCallback;
 	callbacks->eventcallback = KX_EventCallback;
+	callbacks->data = callback_data;
 
 	// User defined Python gameloop path
 	char *custom_loop = startscene->gm.custom_loop;
-	cout << "callbacks made" << endl;
+
 	do
 	{
 		View3D *v3d= CTX_wm_view3d(C);
@@ -427,7 +428,6 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 			setupPythonGameloop(ketsjiengine, custom_loop);
 			
 #endif // WITH_PYTHON
-			cout << "MAINSETUP" << endl;
 
 			//initialize Dome Settings
 			if (scene->gm.stereoflag == STEREO_DOME)

@@ -406,25 +406,6 @@ static bool GPG_NextFrame(GHOST_ISystem* system, GPG_Application *app, int &exit
 	return run;
 }
 
-struct GPG_NextFrameState {
-	GHOST_ISystem* system;
-	GPG_Application *app;
-	GlobalSettings *gs;
-} gpg_nextframestate;
-
-static int GPG_PyNextFrame(void *state0)
-{
-	GPG_NextFrameState *state = (GPG_NextFrameState *) state0;
-	int exitcode;
-	STR_String exitstring;
-	bool run = GPG_NextFrame(state->system, state->app, exitcode, exitstring, state->gs);
-	if (run) return 0;  
-	else {
-		if (exitcode) 
-			fprintf(stderr, "Exit code %d: %s\n", exitcode, exitstring.ReadPtr());
-		return 1;
-	}
-}
 
 int main(int argc, char** argv)
 {
@@ -891,7 +872,10 @@ int main(int argc, char** argv)
 
 				// Create callbacks for render setup and event setup pre engine
 				KX_GhostCallbackData *callback_data = new KX_GhostCallbackData();
-				KX_KetsjiEngine *ketsjiengine = app.getEngine();
+				KX_EngineCallbackData *callbacks = new KX_EngineCallbackData();
+				callbacks->data = callback_data;
+				callbacks->eventcallback = GPG_EventCallback;
+				callbacks->rendercallback = GPG_RenderCallback;
 
 				do {
 					// Read the Blender file
@@ -1092,13 +1076,9 @@ int main(int argc, char** argv)
 						
 						// Add the application as event consumer
 						system->addEventConsumer(&app);
-						KX_EngineCallbackData *callbacks = new KX_EngineCallbackData();
 						
 						// Enter main loop
-						
-						callbacks->eventcallback = GPG_EventCallback;
-						callbacks->rendercallback = GPG_RenderCallback;
-						callbacks->data = callback_data;
+						KX_KetsjiEngine *ketsjiengine = app.getEngine();
 
 						callback_data->system = system;
 						callback_data->app = &app;
