@@ -181,11 +181,11 @@ void KX_KetsjiLogicLoop::UpdateAnimations(double currenttime)
 }
 
 // Asks engine to update physics in context of current scene
-void KX_KetsjiLogicLoop::UpdatePhysics(double current_time, double deltatime, double interval)
+void KX_KetsjiLogicLoop::UpdatePhysics(double current_time, double fixed_step_time, double delta_time)
 {
-	if (interval == NULL)
-		interval = deltatime;
+	if (delta_time == NULL)
+		delta_time = fixed_step_time;
 
-	KX_GetActiveScene()->GetPhysicsEnvironment()->ProceedDeltaTime(current_time, deltatime, interval);
+	KX_GetActiveScene()->GetPhysicsEnvironment()->ProceedDeltaTime(current_time, fixed_step_time, delta_time);
 
 };

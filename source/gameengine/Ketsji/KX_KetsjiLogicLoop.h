@@ -58,7 +58,7 @@ public:
 	void UpdateLogicBricks(double current_time);
 	void UpdateScenegraph(double currenttime);
 	void UpdateAnimations(double currenttime);
-	void UpdatePhysics(double current_time, double deltatime, double interval=NULL);
+	void UpdatePhysics(double current_time, double fixed_step_time, double delta_time);
 	KX_Scene *GetCurrentScene();
 	double GetTime();
 };
