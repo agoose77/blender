@@ -18,3 +18,8 @@ Deliverables:
 
 For another branch:
 - Investigate component-esque architecture for scene.physics, object.physics, object.logic, removing / movingcertain functionality such as KX_GameObject.sensors, ..., 
+
+
+TODO:
+Restructure bge modules to use PyObjectPlus. (e.g KX_PythonInit to delegate to Engine class instance)
+Convert getters setters to attributes
