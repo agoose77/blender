@@ -58,7 +58,7 @@
 #include "KX_PythonInit.h"
 #include "KX_PyConstraintBinding.h"
 #include "PHY_IPhysicsEnvironment.h"
-#include "KX_KetsjiLogicBrickLoop.h"
+#include "KX_SCA_LogicLoop.h"
 
 #ifdef WITH_AUDASPACE
 #  include "AUD_C-API.h"
@@ -180,7 +180,7 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 {
 	// Initialize the time logger
 	m_logger = new KX_TimeCategoryLogger (25);
-	m_logicloop = new KX_KetsjiLogicBrickLoop (this);
+	m_logicloop = new KX_SCA_LogicLoop (this);
 
 	for (int i = tc_first; i < tc_numCategories; i++)
 		m_logger->AddCategory((KX_TimeCategory)i);

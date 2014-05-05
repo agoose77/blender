@@ -26,12 +26,15 @@ void setupPythonGameloop(KX_KetsjiEngine *ketsjiengine, char *custom_loop)
 	STR_String mod_path = STR_String("");
 	char* class_string = path_parts[path_parts.size()-1].Ptr();
 	int parts_size = path_parts.size();
-	unsigned int j = 0;
+	int last_index = parts_size - 1;
+	int j;
 
-	for (NULL; j<parts_size-1; j++)
-			mod_path += path_parts[j];
-		if (j != parts_size - 1)
-				mod_path + ".";
+	for (j = 0; j < last_index; j++)
+	{
+		mod_path += path_parts[j];
+		if (j != last_index - 1)
+			mod_path += ".";
+	}
 
 	// Import the module containing the path
 	PyObject* mod = PyImport_ImportModule(mod_path.Ptr());

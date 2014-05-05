@@ -87,7 +87,6 @@ set(SRC
 	KX_IpoActuator.cpp
 	KX_KetsjiEngine.cpp
 	KX_KetsjiLogicLoop.cpp
-	KX_KetsjiLogicBrickLoop.cpp
 	KX_KetsjiSetupTools.cpp
 	KX_Light.cpp
 	KX_LightIpoSGController.cpp
@@ -120,6 +119,7 @@ set(SRC
 	KX_SCA_AddObjectActuator.cpp
 	KX_SCA_DynamicActuator.cpp
 	KX_SCA_EndObjectActuator.cpp
+	KX_SCA_LogicLoop.cpp
 	KX_SCA_ReplaceMeshActuator.cpp
 	KX_SG_BoneParentNodeRelationship.cpp
 	KX_SG_NodeRelationships.cpp
@@ -158,6 +158,7 @@ set(SRC
 	KX_ConstraintWrapper.h
 	KX_Dome.h
 	KX_EmptyObject.h
+    	KX_EngineCallbackData.h
 	KX_FontObject.h
 	KX_GameActuator.h
 	KX_GameObject.h
@@ -170,6 +171,8 @@ set(SRC
 	KX_ISystem.h
 	KX_IpoActuator.h
 	KX_KetsjiEngine.h
+    	KX_KetsjiSetupTools.h
+    	KX_KetsjiLogicLoop.h
 	KX_Light.h
 	KX_LightIpoSGController.h
 	KX_MaterialIpoController.h
@@ -191,15 +194,18 @@ set(SRC
 	KX_PyMath.h
 	KX_PythonInit.h
 	KX_PythonInitTypes.h
+    	KX_PythonLogicLoop.h
 	KX_PythonMain.h
 	KX_PythonSeq.h
 	KX_RadarSensor.h
 	KX_RayCast.h
 	KX_RayEventManager.h
 	KX_RaySensor.h
+    	KX_ResourceManager.h
 	KX_SCA_AddObjectActuator.h
 	KX_SCA_DynamicActuator.h
 	KX_SCA_EndObjectActuator.h
+	KX_SCA_LogicLoop.h
 	KX_SCA_ReplaceMeshActuator.h
 	KX_SG_BoneParentNodeRelationship.h
 	KX_SG_NodeRelationships.h
