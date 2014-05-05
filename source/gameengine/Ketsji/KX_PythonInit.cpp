@@ -53,7 +53,7 @@
 extern "C" {
 	#  include "bpy_internal_import.h"  /* from the blender python api, but we want to import text too! */
 	#  include "py_capi_utils.h"
-	#  include "mathutils.h" // 'mathutils' module copied here so the blenderlayer can use.
+	#  include "mathutils.h" // 'mathutils' module copied here so the blenderplayer can use.
 	#  include "bgl.h"
 	#  include "blf_py_api.h"
 

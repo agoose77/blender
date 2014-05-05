@@ -1,4 +1,4 @@
-#include "KX_KetsjiLogicBrickLoop.h"
+#include "KX_SCA_LogicLoop.h"
 #include "KX_KetsjiEngine.h"
 #include "KX_KetsjiLogicLoop.h"
 #include "PHY_IPhysicsEnvironment.h"
@@ -10,12 +10,12 @@
 #include "KX_ISceneConverter.h"
 #include "SCA_IInputDevice.h"
 
-KX_KetsjiLogicBrickLoop::KX_KetsjiLogicBrickLoop(KX_KetsjiEngine* engine): KX_KetsjiLogicLoop(engine)
+KX_SCA_LogicLoop::KX_SCA_LogicLoop(KX_KetsjiEngine* engine) : KX_KetsjiLogicLoop(engine)
 {
 };
 
 
-void KX_KetsjiLogicBrickLoop::GiveHandle()
+void KX_SCA_LogicLoop::GiveHandle()
 {
 	while (!m_engine->GetExitCode())
 	{
@@ -25,7 +25,7 @@ void KX_KetsjiLogicBrickLoop::GiveHandle()
 	}
 };
 
-void KX_KetsjiLogicBrickLoop::NextFrame()
+void KX_SCA_LogicLoop::NextFrame()
 {
 	KX_TimeCategoryLogger* logger = m_engine->GetLogger();
 

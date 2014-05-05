@@ -78,4 +78,7 @@ void KX_RasterizerDrawDebugCircle(const MT_Vector3 &center, const MT_Scalar radi
                                   const MT_Vector3 &normal, int nsector);
 
 
+typedef PyObject *(*KX_MOD_PYATTRIBUTE_GET_FUNCTION)(void *self, const struct KX_PYATTRIBUTE_DEF *attrdef);
+#define KX_MOD_PYATTRIBUTE_RO_FUNCTION(name, getfunction) \
+{ name, KX_PYATTRIBUTE_TYPE_FUNCTION, KX_PYATTRIBUTE_RO, 0, 0, 0.f, 0.f, false, false, 0, 0, 1, NULL, NULL, &getfunction, { NULL, NULL, NULL, NULL, NULL, NULL, NULL } }
 #endif  /* __KX_PYTHONINIT_H__ */
