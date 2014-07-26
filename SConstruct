@@ -40,11 +40,13 @@ import string
 import shutil
 import re
 
-# store path to tools
+# store path to tools and modules
 toolpath=os.path.join(".", "build_files", "scons", "tools")
+modulespath=os.path.join(".", "build_files", "scons", "Modules")
 
-# needed for importing tools
+# needed for importing tools and modules
 sys.path.append(toolpath)
+sys.path.append(modulespath)
 
 import Blender
 import btools
@@ -270,6 +272,7 @@ if 'cudakernels' in B.targets:
     env['WITH_BF_CYCLES'] = True
     env['WITH_BF_CYCLES_CUDA_BINARIES'] = True
     env['WITH_BF_PYTHON'] = False
+    env['WITH_BF_LIBMV'] = False
 
 # Configure paths for automated configuration test programs
 env['CONFIGUREDIR'] = os.path.abspath(os.path.normpath(os.path.join(env['BF_BUILDDIR'], "sconf_temp")))
@@ -285,8 +288,7 @@ if env['OURPLATFORM']=='darwin':
     import subprocess
 
     command = ["%s"%env['CC'], "--version"]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=False)
-    line = process.communicate()[0]
+    line = btools.get_command_output(command)
     ver = re.search(r'[0-9]+(\.[0-9]+[svn]+)+', line) or re.search(r'[0-9]+(\.[0-9]+)+', line) # read the "based on LLVM x.xsvn" version here, not the Apple version
     if ver:
         env['CCVERSION'] = ver.group(0).strip('svn')
@@ -505,9 +507,6 @@ else:
 env['CPPFLAGS'].append('-DWITH_AUDASPACE')
 env['CPPFLAGS'].append('-DWITH_AVI')
 env['CPPFLAGS'].append('-DWITH_OPENNL')
-env['CPPFLAGS'].append('-DWITH_BOOL_COMPAT')
-if env['OURPLATFORM'] in ('win32-vc', 'win64-vc') and env['MSVC_VERSION'] == '11.0':
-    env['CPPFLAGS'].append('-D_ALLOW_KEYWORD_MACROS')
 
 if env['OURPLATFORM'] not in ('win32-vc', 'win64-vc'):
     env['CPPFLAGS'].append('-DHAVE_STDBOOL_H')
@@ -596,6 +595,7 @@ if not os.path.isdir ( B.root_build_dir):
 # # Docs not working with epy anymore
 # if not os.path.isdir(B.doc_build_dir) and env['WITH_BF_DOCS']:
 #     os.makedirs ( B.doc_build_dir )
+
 
 ###################################
 # Ensure all data files are valid #
@@ -730,6 +730,8 @@ if B.targets != ['cudakernels']:
     data_to_c_simple("release/datafiles/brushicons/soften.png")
     data_to_c_simple("release/datafiles/brushicons/subtract.png")
     data_to_c_simple("release/datafiles/brushicons/texdraw.png")
+    data_to_c_simple("release/datafiles/brushicons/texfill.png")
+    data_to_c_simple("release/datafiles/brushicons/texmask.png")
     data_to_c_simple("release/datafiles/brushicons/thumb.png")
     data_to_c_simple("release/datafiles/brushicons/twist.png")
     data_to_c_simple("release/datafiles/brushicons/vertexdraw.png")
@@ -777,6 +779,20 @@ env.SConsignFile(B.root_build_dir+'scons-signatures')
 B.init_lib_dict()
 
 ##### END SETUP ##########
+
+if B.targets != ['cudakernels']:
+    # Put all auto configuration run-time tests here
+
+    from FindSharedPtr import FindSharedPtr
+    from FindUnorderedMap import FindUnorderedMap
+
+    conf = Configure(env)
+    conf.env.Append(LINKFLAGS=env['PLATFORM_LINKFLAGS'])
+    FindSharedPtr(conf)
+    FindUnorderedMap(conf)
+    env = conf.Finish()
+
+# End of auto configuration
 
 Export('env')
 
@@ -896,6 +912,7 @@ if env['OURPLATFORM']!='darwin':
             source.remove('CMakeLists.txt')
             source.remove('svm')
             source.remove('closure')
+            source.remove('geom')
             source.remove('shaders')
             source.remove('osl')
             source=['intern/cycles/kernel/'+s for s in source]
@@ -916,6 +933,12 @@ if env['OURPLATFORM']!='darwin':
             source=os.listdir('intern/cycles/kernel/closure')
             if '__pycache__' in source: source.remove('__pycache__')
             source=['intern/cycles/kernel/closure/'+s for s in source]
+            scriptinstall.append(env.Install(dir=dir,source=source))
+            # geom
+            dir=os.path.join(env['BF_INSTALLDIR'], VERSION, 'scripts', 'addons','cycles', 'kernel', 'geom')
+            source=os.listdir('intern/cycles/kernel/geom')
+            if '__pycache__' in source: source.remove('__pycache__')
+            source=['intern/cycles/kernel/geom/'+s for s in source]
             scriptinstall.append(env.Install(dir=dir,source=source))
 
             # licenses
@@ -1094,10 +1117,7 @@ if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross'):
 
     if env['WITH_BF_OPENAL']:
         dllsources.append('${LCGDIR}/openal/lib/OpenAL32.dll')
-        if env['OURPLATFORM'] in ('win32-vc', 'win64-vc') and env['MSVC_VERSION'] == '11.0':
-            pass
-        else:
-            dllsources.append('${LCGDIR}/openal/lib/wrap_oal.dll')
+        dllsources.append('${LCGDIR}/openal/lib/wrap_oal.dll')
 
     if env['WITH_BF_SNDFILE']:
         dllsources.append('${LCGDIR}/sndfile/lib/libsndfile-1.dll')

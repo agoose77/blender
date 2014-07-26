@@ -38,7 +38,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_dynlib.h"
 #include "BLI_math.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
@@ -52,12 +51,12 @@
 #include "DNA_node_types.h"
 #include "DNA_color_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_linestyle_types.h"
 
 #include "IMB_imbuf.h"
 
 #include "BKE_global.h"
 #include "BKE_main.h"
-#include "BKE_ocean.h"
 
 #include "BKE_library.h"
 #include "BKE_image.h"
@@ -146,12 +145,12 @@ void init_tex_mapping(TexMapping *texmap)
 		if (texmap->type == TEXMAP_TYPE_TEXTURE) {
 			/* to transform a texture, the inverse transform needs
 			 * to be applied to the texture coordinate */
-			mul_serie_m4(texmap->mat, tmat, rmat, smat, 0, 0, 0, 0, 0);
+			mul_m4_series(texmap->mat, tmat, rmat, smat);
 			invert_m4(texmap->mat);
 		}
 		else if (texmap->type == TEXMAP_TYPE_POINT) {
 			/* forward transform */
-			mul_serie_m4(texmap->mat, tmat, rmat, smat, 0, 0, 0, 0, 0);
+			mul_m4_series(texmap->mat, tmat, rmat, smat);
 		}
 		else if (texmap->type == TEXMAP_TYPE_VECTOR) {
 			/* no translation for vectors */
@@ -475,7 +474,8 @@ void BKE_texture_free(Tex *tex)
 
 void default_tex(Tex *tex)
 {
-	tex->type = TEX_CLOUDS;
+	tex->type = TEX_IMAGE;
+	tex->ima = NULL;
 	tex->stype = 0;
 	tex->flag = TEX_CHECKER_ODD;
 	tex->imaflag = TEX_INTERPOL | TEX_MIPMAP | TEX_USEALPHA;
@@ -593,7 +593,7 @@ Tex *add_texture(Main *bmain, const char *name)
 
 void default_mtex(MTex *mtex)
 {
-	mtex->texco = TEXCO_ORCO;
+	mtex->texco = TEXCO_UV;
 	mtex->mapto = MAP_COL;
 	mtex->object = NULL;
 	mtex->projx = PROJ_X;
@@ -706,6 +706,10 @@ MTex *add_mtex_id(ID *id, int slot)
 		MEM_freeN(mtex_ar[slot]);
 		mtex_ar[slot] = NULL;
 	}
+	else if (GS(id->name) == ID_MA) {
+		/* Reset this slot's ON/OFF toggle, for materials, when slot was empty. */
+		((Material *)id)->septex &= ~(1 << slot);
+	}
 
 	mtex_ar[slot] = add_mtex();
 
@@ -789,7 +793,9 @@ void BKE_texture_make_local(Tex *tex)
 	Lamp *la;
 	Brush *br;
 	ParticleSettings *pa;
-	int a, is_local = FALSE, is_lib = FALSE;
+	FreestyleLineStyle *ls;
+	int a;
+	bool is_local = false, is_lib = false;
 
 	/* - only lib users: do nothing
 	 * - only local users: set flag
@@ -808,8 +814,8 @@ void BKE_texture_make_local(Tex *tex)
 	while (ma) {
 		for (a = 0; a < MAX_MTEX; a++) {
 			if (ma->mtex[a] && ma->mtex[a]->tex == tex) {
-				if (ma->id.lib) is_lib = TRUE;
-				else is_local = TRUE;
+				if (ma->id.lib) is_lib = true;
+				else is_local = true;
 			}
 		}
 		ma = ma->id.next;
@@ -818,8 +824,8 @@ void BKE_texture_make_local(Tex *tex)
 	while (la) {
 		for (a = 0; a < MAX_MTEX; a++) {
 			if (la->mtex[a] && la->mtex[a]->tex == tex) {
-				if (la->id.lib) is_lib = TRUE;
-				else is_local = TRUE;
+				if (la->id.lib) is_lib = true;
+				else is_local = true;
 			}
 		}
 		la = la->id.next;
@@ -828,8 +834,8 @@ void BKE_texture_make_local(Tex *tex)
 	while (wrld) {
 		for (a = 0; a < MAX_MTEX; a++) {
 			if (wrld->mtex[a] && wrld->mtex[a]->tex == tex) {
-				if (wrld->id.lib) is_lib = TRUE;
-				else is_local = TRUE;
+				if (wrld->id.lib) is_lib = true;
+				else is_local = true;
 			}
 		}
 		wrld = wrld->id.next;
@@ -837,12 +843,12 @@ void BKE_texture_make_local(Tex *tex)
 	br = bmain->brush.first;
 	while (br) {
 		if (br->mtex.tex == tex) {
-			if (br->id.lib) is_lib = TRUE;
-			else is_local = TRUE;
+			if (br->id.lib) is_lib = true;
+			else is_local = true;
 		}
 		if (br->mask_mtex.tex == tex) {
-			if (br->id.lib) is_lib = TRUE;
-			else is_local = TRUE;
+			if (br->id.lib) is_lib = true;
+			else is_local = true;
 		}
 		br = br->id.next;
 	}
@@ -850,14 +856,24 @@ void BKE_texture_make_local(Tex *tex)
 	while (pa) {
 		for (a = 0; a < MAX_MTEX; a++) {
 			if (pa->mtex[a] && pa->mtex[a]->tex == tex) {
-				if (pa->id.lib) is_lib = TRUE;
-				else is_local = TRUE;
+				if (pa->id.lib) is_lib = true;
+				else is_local = true;
 			}
 		}
 		pa = pa->id.next;
 	}
+	ls = bmain->linestyle.first;
+	while (ls) {
+		for (a = 0; a < MAX_MTEX; a++) {
+			if (ls->mtex[a] && ls->mtex[a]->tex == tex) {
+				if (ls->id.lib) is_lib = true;
+				else is_local = true;
+			}
+		}
+		ls = ls->id.next;
+	}
 	
-	if (is_local && is_lib == FALSE) {
+	if (is_local && is_lib == false) {
 		id_clear_lib_data(bmain, &tex->id);
 		extern_local_texture(tex);
 	}
@@ -939,6 +955,19 @@ void BKE_texture_make_local(Tex *tex)
 			}
 			pa = pa->id.next;
 		}
+		ls = bmain->linestyle.first;
+		while (ls) {
+			for (a = 0; a < MAX_MTEX; a++) {
+				if (ls->mtex[a] && ls->mtex[a]->tex == tex) {
+					if (ls->id.lib == NULL) {
+						ls->mtex[a]->tex = tex_new;
+						tex_new->id.us++;
+						tex->id.us--;
+					}
+				}
+			}
+			ls = ls->id.next;
+		}
 	}
 }
 
@@ -1000,6 +1029,41 @@ void set_current_lamp_texture(Lamp *la, Tex *newtex)
 	}
 }
 
+Tex *give_current_linestyle_texture(FreestyleLineStyle *linestyle)
+{
+	MTex *mtex = NULL;
+	Tex *tex = NULL;
+
+	if (linestyle) {
+		mtex = linestyle->mtex[(int)(linestyle->texact)];
+		if (mtex) tex = mtex->tex;
+	}
+
+	return tex;
+}
+
+void set_current_linestyle_texture(FreestyleLineStyle *linestyle, Tex *newtex)
+{
+	int act = linestyle->texact;
+
+	if (linestyle->mtex[act] && linestyle->mtex[act]->tex)
+		id_us_min(&linestyle->mtex[act]->tex->id);
+
+	if (newtex) {
+		if (!linestyle->mtex[act]) {
+			linestyle->mtex[act] = add_mtex();
+			linestyle->mtex[act]->texco = TEXCO_STROKE;
+		}
+
+		linestyle->mtex[act]->tex = newtex;
+		id_us_plus(&newtex->id);
+	}
+	else if (linestyle->mtex[act]) {
+		MEM_freeN(linestyle->mtex[act]);
+		linestyle->mtex[act] = NULL;
+	}
+}
+
 bNode *give_current_material_texture_node(Material *ma)
 {
 	if (ma && ma->use_nodes && ma->nodetree)
@@ -1034,7 +1098,7 @@ Tex *give_current_material_texture(Material *ma)
 	return tex;
 }
 
-int give_active_mtex(ID *id, MTex ***mtex_ar, short *act)
+bool give_active_mtex(ID *id, MTex ***mtex_ar, short *act)
 {
 	switch (GS(id->name)) {
 		case ID_MA:
@@ -1049,6 +1113,10 @@ int give_active_mtex(ID *id, MTex ***mtex_ar, short *act)
 			*mtex_ar =       ((Lamp *)id)->mtex;
 			if (act) *act =  (((Lamp *)id)->texact);
 			break;
+		case ID_LS:
+			*mtex_ar =       ((FreestyleLineStyle *)id)->mtex;
+			if (act) *act =  (((FreestyleLineStyle *)id)->texact);
+			break;
 		case ID_PA:
 			*mtex_ar =       ((ParticleSettings *)id)->mtex;
 			if (act) *act =  (((ParticleSettings *)id)->texact);
@@ -1056,10 +1124,10 @@ int give_active_mtex(ID *id, MTex ***mtex_ar, short *act)
 		default:
 			*mtex_ar = NULL;
 			if (act) *act =  0;
-			return FALSE;
+			return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
 void set_active_mtex(ID *id, short act)
@@ -1076,6 +1144,9 @@ void set_active_mtex(ID *id, short act)
 			break;
 		case ID_LA:
 			((Lamp *)id)->texact = act;
+			break;
+		case ID_LS:
+			((FreestyleLineStyle *)id)->texact = act;
 			break;
 		case ID_PA:
 			((ParticleSettings *)id)->texact = act;
@@ -1108,8 +1179,11 @@ void set_current_material_texture(Material *ma, Tex *newtex)
 		id_us_min(&tex->id);
 
 		if (newtex) {
-			if (!ma->mtex[act])
+			if (!ma->mtex[act]) {
 				ma->mtex[act] = add_mtex();
+				/* Reset this slot's ON/OFF toggle, for materials, when slot was empty. */
+				ma->septex &= ~(1 << act);
+			}
 			
 			ma->mtex[act]->tex = newtex;
 			id_us_plus(&newtex->id);
@@ -1307,7 +1381,7 @@ PointDensity *BKE_add_pointdensity(void)
 	pd->falloff_curve->preset = CURVE_PRESET_LINE;
 	pd->falloff_curve->cm->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
 	curvemap_reset(pd->falloff_curve->cm, &pd->falloff_curve->clipr, pd->falloff_curve->preset, CURVEMAP_SLOPE_POSITIVE);
-	curvemapping_changed(pd->falloff_curve, FALSE);
+	curvemapping_changed(pd->falloff_curve, false);
 
 	return pd;
 } 

@@ -147,7 +147,7 @@ enum {
 typedef struct uiLinkLine {  /* only for draw/edit */
 	struct uiLinkLine *next, *prev;
 	struct uiBut *from, *to;
-	short flag, pad;
+	short flag, deactive;
 } uiLinkLine;
 
 typedef struct {
@@ -186,6 +186,7 @@ struct uiBut {
 	 * (type == LABEL),      Use (a1 == 1.0f) to use a2 as a blending factor (wow, this is imaginative!).
 	 * (type == SCROLL)      Use as scroll size.
 	 * (type == SEARCH_MENU) Use as number or rows.
+	 * (type == COLOR)       Use as indication of color palette
 	 */
 	float a1;
 
@@ -193,6 +194,7 @@ struct uiBut {
 	 * (type == NUM),        Use to store RNA 'precision' value, for dragging and click-step.
 	 * (type == LABEL),      If (a1 == 1.0f) use a2 as a blending factor.
 	 * (type == SEARCH_MENU) Use as number or columns.
+	 * (type == COLOR)       Use as indication of active palette color
 	 */
 	float a2;
 
@@ -428,6 +430,19 @@ struct uiKeyNavLock {
 	int event_xy[2];
 };
 
+typedef uiBlock * (*uiBlockHandleCreateFunc)(struct bContext *C, struct uiPopupBlockHandle *handle, void *arg1);
+
+struct uiPopupBlockCreate {
+	uiBlockCreateFunc              create_func;
+	uiBlockHandleCreateFunc handle_create_func;
+	void *arg;
+
+	int event_xy[2];
+
+	/* when popup is initialized from a button */
+	ARegion *butregion;
+};
+
 struct uiPopupBlockHandle {
 	/* internal */
 	struct ARegion *region;
@@ -442,6 +457,9 @@ struct uiPopupBlockHandle {
 	void (*cancel_func)(struct bContext *C, void *arg);
 	void *popup_arg;
 	
+	/* store data for refreshing popups */
+	struct uiPopupBlockCreate popup_create_vars;
+
 	struct wmTimer *scrolltimer;
 
 	struct uiKeyNavLock keynav_state;
@@ -455,11 +473,16 @@ struct uiPopupBlockHandle {
 	/* return values */
 	int butretval;
 	int menuretval;
-	float retvalue;
+	int   retvalue;
 	float retvec[4];
 
 	/* menu direction */
 	int direction;
+
+/* #ifdef USE_DRAG_POPUP */
+	bool is_grab;
+	int     grab_xy_prev[2];
+/* #endif */
 };
 
 uiBlock *ui_block_func_COLOR(struct bContext *C, uiPopupBlockHandle *handle, void *arg_but);
@@ -468,12 +491,15 @@ struct ARegion *ui_tooltip_create(struct bContext *C, struct ARegion *butregion,
 void ui_tooltip_free(struct bContext *C, struct ARegion *ar);
 
 uiBut *ui_popup_menu_memory_get(struct uiBlock *block);
-void   ui_popup_menu_memory_set(struct uiBlock *block, struct uiBut *but);
+void   ui_popup_menu_memory_set(uiBlock *block, struct uiBut *but);
+
+void   ui_popup_translate(struct bContext *C, struct ARegion *ar, const int mdiff[2]);
 
 float *ui_block_hsv_get(struct uiBlock *block);
 void ui_popup_block_scrolltest(struct uiBlock *block);
 
 void ui_rgb_to_color_picker_compat_v(const float rgb[3], float r_cp[3]);
+void ui_rgb_to_color_picker_v(const float rgb[3], float r_cp[3]);
 void ui_color_picker_to_rgb_v(const float r_cp[3], float rgb[3]);
 void ui_color_picker_to_rgb(float r_cp0, float r_cp1, float r_cp2, float *r, float *g, float *b);
 
@@ -488,7 +514,8 @@ bool ui_searchbox_apply(uiBut *but, struct ARegion *ar);
 void ui_searchbox_free(struct bContext *C, struct ARegion *ar);
 void ui_but_search_test(uiBut *but);
 
-typedef uiBlock * (*uiBlockHandleCreateFunc)(struct bContext *C, struct uiPopupBlockHandle *handle, void *arg1);
+uiBlock *ui_popup_block_refresh(struct bContext *C, uiPopupBlockHandle *handle,
+                                ARegion *butregion, uiBut *but);
 
 uiPopupBlockHandle *ui_popup_block_create(struct bContext *C, struct ARegion *butregion, uiBut *but,
                                           uiBlockCreateFunc create_func, uiBlockHandleCreateFunc handle_create_func,
@@ -531,6 +558,8 @@ extern void ui_button_active_free(const struct bContext *C, uiBut *but);
 extern bool ui_button_is_active(struct ARegion *ar) ATTR_WARN_UNUSED_RESULT;
 extern int ui_button_open_menu_direction(uiBut *but);
 extern void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but, const bool restore);
+extern uiBut *ui_but_find_activated(struct ARegion *ar);
+
 void ui_button_clipboard_free(void);
 void ui_panel_menu(struct bContext *C, ARegion *ar, Panel *pa);
 uiBut *ui_but_find_old(uiBlock *block_old, const uiBut *but_new);
@@ -543,7 +572,7 @@ void ui_draw_menu_back(struct uiStyle *style, uiBlock *block, rcti *rect);
 uiWidgetColors *ui_tooltip_get_theme(void);
 void ui_draw_tooltip_background(uiStyle *UNUSED(style), uiBlock *block, rcti *rect);
 void ui_draw_search_back(struct uiStyle *style, uiBlock *block, rcti *rect);
-int ui_link_bezier_points(const rcti *rect, float coord_array[][2], int resol);
+bool ui_link_bezier_points(const rcti *rect, float coord_array[][2], int resol);
 void ui_draw_link_bezier(const rcti *rect);
 
 extern void ui_draw_but(const struct bContext *C, ARegion *ar, struct uiStyle *style, uiBut *but, rcti *rect);
@@ -564,7 +593,6 @@ int ui_id_icon_get(struct bContext *C, struct ID *id, const bool big);
 
 /* resources.c */
 void init_userdef_do_versions(void);
-void init_userdef_factory(void);
 void ui_theme_init_default(void);
 void ui_style_init_default(void);
 void ui_resources_init(void);

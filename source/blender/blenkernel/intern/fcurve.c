@@ -45,7 +45,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_math_easing.h"
+#include "BLI_easing.h"
 #include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
@@ -276,7 +276,7 @@ int list_find_data_fcurves(ListBase *dst, ListBase *src, const char *dataPrefix,
 	int matches = 0;
 	
 	/* sanity checks */
-	if (ELEM4(NULL, dst, src, dataPrefix, dataName))
+	if (ELEM(NULL, dst, src, dataPrefix, dataName))
 		return 0;
 	else if ((dataPrefix[0] == 0) || (dataName[0] == 0))
 		return 0;
@@ -350,10 +350,6 @@ FCurve *rna_get_fcurve(PointerRNA *ptr, PropertyRNA *prop, int rnaindex, bAction
 }
 
 /* ----------------- Finding Keyframes/Extents -------------------------- */
-
-/* threshold for binary-searching keyframes - threshold here should be good enough for now, but should become userpref */
-#define BEZT_BINARYSEARCH_THRESH   0.01f /* was 0.00001, but giving errors */
-
 
 /* Binary search algorithm for finding where to insert BezTriple, with optional argument for precision required.
  * Returns the index to insert at (data already at that index will be offset if replace is 0)
@@ -447,7 +443,7 @@ int binarysearch_bezt_index(BezTriple array[], float frame, int arraylen, bool *
 static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple **last,
                                       const bool do_sel_only)
 {
-	short found = FALSE;
+	bool found = false;
 	
 	/* init outputs */
 	*first = NULL;
@@ -467,17 +463,17 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 		for (i = 0; i < fcu->totvert; bezt++, i++) {
 			if (BEZSELECTED(bezt)) {
 				*first = bezt;
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}
 		
 		/* find last selected */
-		bezt = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, sizeof(BezTriple), fcu->totvert);
+		bezt = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, fcu->totvert);
 		for (i = 0; i < fcu->totvert; bezt--, i++) {
 			if (BEZSELECTED(bezt)) {
 				*last = bezt;
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}
@@ -485,8 +481,8 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 	else {
 		/* just full array */
 		*first = fcu->bezt;
-		*last = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, sizeof(BezTriple), fcu->totvert);
-		found = TRUE;
+		*last = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, fcu->totvert);
+		found = true;
 	}
 	
 	return found;
@@ -526,20 +522,31 @@ bool calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 			
 			/* only loop over keyframes to find extents for values if needed */
 			if (ymin || ymax) {
-				BezTriple *bezt;
+				BezTriple *bezt, *prevbezt = NULL;
 				
-				for (bezt = fcu->bezt, i = 0; i < fcu->totvert; bezt++, i++) {
-					if ((do_sel_only == FALSE) || BEZSELECTED(bezt)) {
+				for (bezt = fcu->bezt, i = 0; i < fcu->totvert; prevbezt = bezt, bezt++, i++) {
+					if ((do_sel_only == false) || BEZSELECTED(bezt)) {	
+						/* keyframe itself */
+						yminv = min_ff(yminv, bezt->vec[1][1]);
+						ymaxv = max_ff(ymaxv, bezt->vec[1][1]);
+						
 						if (include_handles) {
-							yminv = min_ffff(yminv, bezt->vec[1][1], bezt->vec[0][1], bezt->vec[2][1]);
-							ymaxv = max_ffff(ymaxv, bezt->vec[1][1], bezt->vec[0][1], bezt->vec[2][1]);
-						}
-						else {
-							yminv = min_ff(yminv, bezt->vec[1][1]);
-							ymaxv = max_ff(ymaxv, bezt->vec[1][1]);
+							/* left handle - only if applicable 
+							 * NOTE: for the very first keyframe, the left handle actually has no bearings on anything
+							 */
+							if (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)) {
+								yminv = min_ff(yminv, bezt->vec[0][1]);
+								ymaxv = max_ff(ymaxv, bezt->vec[0][1]);
+							}
+							
+							/* right handle - only if applicable */
+							if (bezt->ipo == BEZT_IPO_BEZ) {
+								yminv = min_ff(yminv, bezt->vec[2][1]);
+								ymaxv = min_ff(ymaxv, bezt->vec[2][1]);
+							}
 						}
 						
-						foundvert = TRUE;
+						foundvert = true;
 					}
 				}
 			}
@@ -561,7 +568,7 @@ bool calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 					if (fpt->vec[1] > ymaxv)
 						ymaxv = fpt->vec[1];
 					
-					foundvert = TRUE;
+					foundvert = true;
 				}
 			}
 		}
@@ -593,7 +600,7 @@ bool calc_fcurve_range(FCurve *fcu, float *start, float *end,
                        const bool do_sel_only, const bool do_min_length)
 {
 	float min = 999999999.0f, max = -999999999.0f;
-	short foundvert = FALSE;
+	bool foundvert = false;
 
 	if (fcu->totvert) {
 		if (fcu->bezt) {
@@ -608,19 +615,19 @@ bool calc_fcurve_range(FCurve *fcu, float *start, float *end,
 				min = min_ff(min, bezt_first->vec[1][0]);
 				max = max_ff(max, bezt_last->vec[1][0]);
 				
-				foundvert = TRUE;
+				foundvert = true;
 			}
 		}
 		else if (fcu->fpt) {
 			min = min_ff(min, fcu->fpt[0].vec[0]);
 			max = max_ff(max, fcu->fpt[fcu->totvert - 1].vec[0]);
 			
-			foundvert = TRUE;
+			foundvert = true;
 		}
 		
 	}
 	
-	if (foundvert == FALSE) {
+	if (foundvert == false) {
 		min = max = 0.0f;
 	}
 
@@ -882,7 +889,7 @@ void testhandles_fcurve(FCurve *fcu, const bool use_handle)
  */
 void sort_time_fcurve(FCurve *fcu)
 {
-	short ok = 1;
+	bool ok = true;
 	
 	/* keep adjusting order of beztriples until nothing moves (bubble-sort) */
 	while (ok) {
@@ -1309,7 +1316,8 @@ static float dvar_eval_transChan(ChannelDriver *driver, DriverVar *dvar)
 	bPoseChannel *pchan;
 	float mat[4][4];
 	float oldEul[3] = {0.0f, 0.0f, 0.0f};
-	short use_eulers = FALSE, rot_order = ROT_MODE_EUL;
+	bool use_eulers = false;
+	short rot_order = ROT_MODE_EUL;
 	
 	/* check if this target has valid data */
 	if ((ob == NULL) || (GS(ob->id.name) != ID_OB)) {
@@ -1337,7 +1345,7 @@ static float dvar_eval_transChan(ChannelDriver *driver, DriverVar *dvar)
 		if (pchan->rotmode > 0) {
 			copy_v3_v3(oldEul, pchan->eul);
 			rot_order = pchan->rotmode;
-			use_eulers = TRUE;
+			use_eulers = true;
 		}
 		
 		if (dtar->flag & DTAR_FLAG_LOCALSPACE) {
@@ -1364,7 +1372,7 @@ static float dvar_eval_transChan(ChannelDriver *driver, DriverVar *dvar)
 		if (ob->rotmode > 0) {
 			copy_v3_v3(oldEul, ob->rot);
 			rot_order = ob->rotmode;
-			use_eulers = TRUE;
+			use_eulers = true;
 		}
 		
 		if (dtar->flag & DTAR_FLAG_LOCALSPACE) {
@@ -1931,6 +1939,7 @@ static void berekenx(float *f, float *o, int b)
 /* Calculate F-Curve value for 'evaltime' using BezTriple keyframes */
 static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime)
 {
+	const float eps = 1.e-8f;
 	BezTriple *bezt, *prevbezt, *lastbezt;
 	float v1[2], v2[2], v3[2], v4[2], opl[32], dx, fac;
 	unsigned int a;
@@ -2052,8 +2061,14 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 		/* evaltime occurs somewhere in the middle of the curve */
 		bool exact = false;
 		
-		/* - use binary search to find appropriate keyframes */
-		a = binarysearch_bezt_index_ex(bezts, evaltime, fcu->totvert, 0.001, &exact);
+		/* Use binary search to find appropriate keyframes...
+		 * 
+		 * The threshold here has the following constraints:
+		 *    - 0.001   is too coarse   -> We get artifacts with 2cm driver movements at 1BU = 1m (see T40332)
+		 *    - 0.00001 is too fine     -> Weird errors, like selecting the wrong keyframe range (see T39207), occur.
+		 *                                 This lower bound was established in b888a32eee8147b028464336ad2404d8155c64dd
+		 */
+		a = binarysearch_bezt_index_ex(bezts, evaltime, fcu->totvert, 0.0001, &exact);
 		if (G.debug & G_DEBUG) printf("eval fcurve '%s' - %f => %d/%d, %d\n", fcu->rna_path, evaltime, a, fcu->totvert, exact);
 		
 		if (exact) {
@@ -2076,7 +2091,7 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 		if (exact) {
 			cvalue = prevbezt->vec[1][1];
 		}
-		else if (fabsf(bezt->vec[1][0] - evaltime) < SMALL_NUMBER) {
+		else if (fabsf(bezt->vec[1][0] - evaltime) < eps) {
 			cvalue = bezt->vec[1][1];
 		}
 		/* evaltime occurs within the interval defined by these two keyframes */
@@ -2126,20 +2141,24 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 						
 					case BEZT_IPO_LIN:
 						/* linear - simply linearly interpolate between values of the two keyframes */
-						cvalue = LinearEase(time, begin, change, duration);
+						cvalue = BLI_easing_linear_ease(time, begin, change, duration);
 						break;
 						
 					/* easing ............................................ */
 					case BEZT_IPO_BACK:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = BackEaseIn(time, begin, change, duration, prevbezt->back);
+								cvalue = BLI_easing_back_ease_in(time, begin, change, duration, prevbezt->back);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = BackEaseOut(time, begin, change, duration, prevbezt->back);
+								cvalue = BLI_easing_back_ease_out(time, begin, change, duration, prevbezt->back);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = BackEaseInOut(time, begin, change, duration, prevbezt->back);
+								cvalue = BLI_easing_back_ease_in_out(time, begin, change, duration, prevbezt->back);
+								break;
+								
+							default: /* default/auto: same as ease out */
+								cvalue = BLI_easing_back_ease_out(time, begin, change, duration, prevbezt->back);
 								break;
 						}
 						break;
@@ -2147,13 +2166,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_BOUNCE:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = BounceEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_bounce_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = BounceEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_bounce_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = BounceEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_bounce_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease out */
+								cvalue = BLI_easing_bounce_ease_out(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2161,13 +2184,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_CIRC:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = CircEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_circ_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = CircEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_circ_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = CircEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_circ_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_circ_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2175,13 +2202,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_CUBIC:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = CubicEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_cubic_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = CubicEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_cubic_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = CubicEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_cubic_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_cubic_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2189,13 +2220,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_ELASTIC:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = ElasticEaseIn(time, begin, change, duration, amplitude, period);
+								cvalue = BLI_easing_elastic_ease_in(time, begin, change, duration, amplitude, period);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = ElasticEaseOut(time, begin, change, duration, amplitude, period);
+								cvalue = BLI_easing_elastic_ease_out(time, begin, change, duration, amplitude, period);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = ElasticEaseInOut(time, begin, change, duration, amplitude, period);
+								cvalue = BLI_easing_elastic_ease_in_out(time, begin, change, duration, amplitude, period);
+								break;
+								
+							default: /* default/auto: same as ease out */
+								cvalue = BLI_easing_elastic_ease_out(time, begin, change, duration, amplitude, period);
 								break;
 						}
 						break;
@@ -2203,13 +2238,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_EXPO:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = ExpoEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_expo_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = ExpoEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_expo_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = ExpoEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_expo_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_expo_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2217,13 +2256,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_QUAD:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = QuadEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_quad_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = QuadEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_quad_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = QuadEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_quad_ease_in_out(time, begin, change, duration);
+								break;
+							
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_quad_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2231,13 +2274,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_QUART:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = QuartEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_quart_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = QuartEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_quart_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = QuartEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_quart_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_quart_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2245,13 +2292,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_QUINT:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = QuintEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_quint_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = QuintEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_quint_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = QuintEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_quint_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_quint_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2259,13 +2310,17 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 					case BEZT_IPO_SINE:
 						switch (prevbezt->easing) {
 							case BEZT_IPO_EASE_IN:
-								cvalue = SineEaseIn(time, begin, change, duration);
+								cvalue = BLI_easing_sine_ease_in(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_OUT:
-								cvalue = SineEaseOut(time, begin, change, duration);
+								cvalue = BLI_easing_sine_ease_out(time, begin, change, duration);
 								break;
 							case BEZT_IPO_EASE_IN_OUT:
-								cvalue = SineEaseInOut(time, begin, change, duration);
+								cvalue = BLI_easing_sine_ease_in_out(time, begin, change, duration);
+								break;
+								
+							default: /* default/auto: same as ease in */
+								cvalue = BLI_easing_sine_ease_in(time, begin, change, duration);
 								break;
 						}
 						break;
@@ -2384,7 +2439,7 @@ float evaluate_fcurve(FCurve *fcu, float evaltime)
 		cvalue = fcurve_eval_samples(fcu, fcu->fpt, devaltime);
 	
 	/* evaluate modifiers */
-	evaluate_value_fmodifiers(storage, &fcu->modifiers, fcu, &cvalue, evaltime);
+	evaluate_value_fmodifiers(storage, &fcu->modifiers, fcu, &cvalue, devaltime);
 
 	evaluate_fmodifiers_storage_free(storage);
 

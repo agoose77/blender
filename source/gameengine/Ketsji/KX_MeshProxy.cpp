@@ -44,7 +44,6 @@
 #include "KX_BlenderMaterial.h"
 
 #include "KX_PyMath.h"
-#include "KX_ConvertPhysicsObject.h"
 
 #include "PyObjectPlus.h" 
 

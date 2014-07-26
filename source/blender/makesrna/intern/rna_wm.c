@@ -519,7 +519,7 @@ static PointerRNA rna_Operator_properties_get(PointerRNA *ptr)
 static PointerRNA rna_OperatorMacro_properties_get(PointerRNA *ptr)
 {
 	wmOperatorTypeMacro *otmacro = (wmOperatorTypeMacro *)ptr->data;
-	wmOperatorType *ot = WM_operatortype_find(otmacro->idname, TRUE);
+	wmOperatorType *ot = WM_operatortype_find(otmacro->idname, true);
 	return rna_pointer_inherit_refine(ptr, ot->srna, otmacro->properties);
 }
 
@@ -563,6 +563,24 @@ static int rna_Event_unicode_length(PointerRNA *ptr)
 	else {
 		return 0;
 	}
+}
+
+static float rna_Event_pressure_get(PointerRNA *ptr)
+{
+	wmEvent *event = ptr->data;
+	return WM_event_tablet_data(event, NULL, NULL);
+}
+
+static int rna_Event_is_tablet_get(PointerRNA *ptr)
+{
+	wmEvent *event = ptr->data;
+	return WM_event_is_tablet(event);
+}
+
+static void rna_Event_tilt_get(PointerRNA *ptr, float *values)
+{
+	wmEvent *event = ptr->data;
+	WM_event_tablet_data(event, NULL, values);
 }
 
 static PointerRNA rna_PopupMenu_layout_get(PointerRNA *ptr)
@@ -862,7 +880,7 @@ static int rna_wmClipboard_length(PointerRNA *UNUSED(ptr))
 
 static void rna_wmClipboard_set(PointerRNA *UNUSED(ptr), const char *value)
 {
-	WM_clipboard_text_set((void *) value, FALSE);
+	WM_clipboard_text_set((void *) value, false);
 }
 
 #ifdef WITH_PYTHON
@@ -1157,7 +1175,7 @@ static StructRNA *rna_Operator_register(Main *bmain, ReportList *reports, void *
 
 	/* check if we have registered this operator type before, and remove it */
 	{
-		wmOperatorType *ot = WM_operatortype_find(dummyot.idname, TRUE);
+		wmOperatorType *ot = WM_operatortype_find(dummyot.idname, true);
 		if (ot && ot->ext.srna)
 			rna_Operator_unregister(bmain, ot->ext.srna);
 	}
@@ -1249,7 +1267,7 @@ static StructRNA *rna_MacroOperator_register(Main *bmain, ReportList *reports, v
 
 	/* check if we have registered this operator type before, and remove it */
 	{
-		wmOperatorType *ot = WM_operatortype_find(dummyot.idname, TRUE);
+		wmOperatorType *ot = WM_operatortype_find(dummyot.idname, true);
 		if (ot && ot->ext.srna)
 			rna_Operator_unregister(bmain, ot->ext.srna);
 	}
@@ -1608,6 +1626,21 @@ static void rna_def_event(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Mouse Previous Y Position", "The window relative vertical location of the mouse");
 
+	prop = RNA_def_property(srna, "pressure", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_float_funcs(prop, "rna_Event_pressure_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Tablet Pressure", "The pressure of the tablet or 1.0 if no tablet present");
+
+	prop = RNA_def_property(srna, "tilt", PROP_FLOAT, PROP_XYZ_LENGTH);
+	RNA_def_property_array(prop, 2);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_float_funcs(prop, "rna_Event_tilt_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Tablet Tilt", "The pressure of the tablet or zeroes if no tablet present");
+
+	prop = RNA_def_property(srna, "is_tablet", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_boolean_funcs(prop, "rna_Event_is_tablet_get", NULL);
+	RNA_def_property_ui_text(prop, "Tablet Pressure", "The pressure of the tablet or 1.0 if no tablet present");
 
 	/* modifiers */
 	prop = RNA_def_property(srna, "shift", PROP_BOOLEAN, PROP_NONE);

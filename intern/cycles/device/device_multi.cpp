@@ -233,7 +233,8 @@ public:
 		mem.device_pointer = tmp;
 	}
 
-	void draw_pixels(device_memory& rgba, int y, int w, int h, int dy, int width, int height, bool transparent)
+	void draw_pixels(device_memory& rgba, int y, int w, int h, int dy, int width, int height, bool transparent,
+		const DeviceDrawParams &draw_params)
 	{
 		device_ptr tmp = rgba.device_pointer;
 		int i = 0, sub_h = h/devices.size();
@@ -247,7 +248,7 @@ public:
 			/* adjust math for w/width */
 
 			rgba.device_pointer = sub.ptr_map[tmp];
-			sub.device->draw_pixels(rgba, sy, w, sh, sdy, width, sheight, transparent);
+			sub.device->draw_pixels(rgba, sy, w, sh, sdy, width, sheight, transparent, draw_params);
 			i++;
 		}
 
@@ -275,6 +276,11 @@ public:
 		}
 
 		return -1;
+	}
+
+	int get_split_task_count(DeviceTask& task)
+	{
+		return 1;
 	}
 
 	void task_add(DeviceTask& task)
@@ -327,6 +333,7 @@ static bool device_multi_add(vector<DeviceInfo>& devices, DeviceType type, bool 
 
 	info.advanced_shading = with_advanced_shading;
 	info.pack_images = false;
+	info.extended_images = true;
 
 	foreach(DeviceInfo& subinfo, devices) {
 		if(subinfo.type == type) {
@@ -350,6 +357,7 @@ static bool device_multi_add(vector<DeviceInfo>& devices, DeviceType type, bool 
 			if(subinfo.display_device)
 				info.display_device = true;
 			info.pack_images = info.pack_images || subinfo.pack_images;
+			info.extended_images = info.extended_images && subinfo.extended_images;
 			num_added++;
 		}
 	}

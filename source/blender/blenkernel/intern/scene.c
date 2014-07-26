@@ -34,12 +34,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifndef WIN32
-#  include <unistd.h>
-#else
-#  include <io.h>
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_anim_types.h"
@@ -80,7 +74,6 @@
 #include "BKE_node.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
-#include "BKE_pointcache.h"
 #include "BKE_rigidbody.h"
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
@@ -476,6 +469,23 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->r.bake_normal_space = R_BAKE_SPACE_TANGENT;
 	sce->r.bake_samples = 256;
 	sce->r.bake_biasdist = 0.001;
+
+	sce->r.bake.flag = R_BAKE_CLEAR;
+	sce->r.bake.width = 512;
+	sce->r.bake.height = 512;
+	sce->r.bake.margin = 16;
+	sce->r.bake.normal_space = R_BAKE_SPACE_TANGENT;
+	sce->r.bake.normal_swizzle[0] = R_BAKE_POSX;
+	sce->r.bake.normal_swizzle[1] = R_BAKE_POSY;
+	sce->r.bake.normal_swizzle[2] = R_BAKE_POSZ;
+	BLI_strncpy(sce->r.bake.filepath, U.renderdir, sizeof(sce->r.bake.filepath));
+
+	sce->r.bake.im_format.planes = R_IMF_PLANES_RGBA;
+	sce->r.bake.im_format.imtype = R_IMF_IMTYPE_PNG;
+	sce->r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
+	sce->r.bake.im_format.quality = 90;
+	sce->r.bake.im_format.compress = 15;
+
 	sce->r.scemode = R_DOCOMP | R_DOSEQ | R_EXTENSION;
 	sce->r.stamp = R_STAMP_TIME | R_STAMP_FRAME | R_STAMP_DATE | R_STAMP_CAMERA | R_STAMP_SCENE | R_STAMP_FILENAME | R_STAMP_RENDERTIME;
 	sce->r.stamp_font_id = 12;
@@ -709,14 +719,14 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 /* called from creator.c */
 Scene *BKE_scene_set_name(Main *bmain, const char *name)
 {
-	Scene *sce = (Scene *)BKE_libblock_find_name(ID_SCE, name);
+	Scene *sce = (Scene *)BKE_libblock_find_name_ex(bmain, ID_SCE, name);
 	if (sce) {
 		BKE_scene_set_background(bmain, sce);
-		printf("Scene switch: '%s' in file: '%s'\n", name, G.main->name);
+		printf("Scene switch: '%s' in file: '%s'\n", name, bmain->name);
 		return sce;
 	}
 
-	printf("Can't find scene: '%s' in file: '%s'\n", name, G.main->name);
+	printf("Can't find scene: '%s' in file: '%s'\n", name, bmain->name);
 	return NULL;
 }
 
@@ -737,6 +747,13 @@ static void scene_unlink_space_node(SpaceNode *snode, Scene *sce)
 		snode->from = NULL;
 		snode->nodetree = NULL;
 		snode->edittree = NULL;
+	}
+}
+
+static void scene_unlink_space_buts(SpaceButs *sbuts, Scene *sce)
+{
+	if (sbuts->pinid == &sce->id) {
+		sbuts->pinid = NULL;
 	}
 }
 
@@ -772,8 +789,14 @@ void BKE_scene_unlink(Main *bmain, Scene *sce, Scene *newsce)
 		for (area = screen->areabase.first; area; area = area->next) {
 			SpaceLink *space_link;
 			for (space_link = area->spacedata.first; space_link; space_link = space_link->next) {
-				if (space_link->spacetype == SPACE_NODE)
-					scene_unlink_space_node((SpaceNode *)space_link, sce);
+				switch (space_link->spacetype) {
+					case SPACE_NODE:
+						scene_unlink_space_node((SpaceNode *)space_link, sce);
+						break;
+					case SPACE_BUTS:
+						scene_unlink_space_buts((SpaceButs *)space_link, sce);
+						break;
+				}
 			}
 		}
 	}
@@ -781,9 +804,7 @@ void BKE_scene_unlink(Main *bmain, Scene *sce, Scene *newsce)
 	BKE_libblock_free(bmain, sce);
 }
 
-/* used by metaballs
- * doesn't return the original duplicated object, only dupli's
- */
+/* Used by metaballs, return *all* objects (including duplis) existing in the scene (including scene's sets) */
 int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
                              Scene **scene, int val, Base **base, Object **ob)
 {
@@ -794,11 +815,12 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 		iter->phase = F_START;
 		iter->dupob = NULL;
 		iter->duplilist = NULL;
+		iter->dupli_refob = NULL;
 	}
 	else {
 		/* run_again is set when a duplilist has been ended */
 		while (run_again) {
-			run_again = 0;
+			run_again = false;
 
 			/* the first base */
 			if (iter->phase == F_START) {
@@ -856,34 +878,46 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 							
 							iter->dupob = iter->duplilist->first;
 
-							if (!iter->dupob)
+							if (!iter->dupob) {
 								free_object_duplilist(iter->duplilist);
+								iter->duplilist = NULL;
+							}
+							iter->dupli_refob = NULL;
 						}
 					}
 				}
 				/* handle dupli's */
 				if (iter->dupob) {
-					
-					copy_m4_m4(iter->omat, iter->dupob->ob->obmat);
-					copy_m4_m4(iter->dupob->ob->obmat, iter->dupob->mat);
-					
 					(*base)->flag |= OB_FROMDUPLI;
 					*ob = iter->dupob->ob;
 					iter->phase = F_DUPLI;
-					
+
+					if (iter->dupli_refob != *ob) {
+						if (iter->dupli_refob) {
+							/* Restore previous object's real matrix. */
+							copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+						}
+						/* Backup new object's real matrix. */
+						iter->dupli_refob = *ob;
+						copy_m4_m4(iter->omat, iter->dupli_refob->obmat);
+					}
+					copy_m4_m4((*ob)->obmat, iter->dupob->mat);
+
 					iter->dupob = iter->dupob->next;
 				}
 				else if (iter->phase == F_DUPLI) {
 					iter->phase = F_SCENE;
 					(*base)->flag &= ~OB_FROMDUPLI;
 					
-					for (iter->dupob = iter->duplilist->first; iter->dupob; iter->dupob = iter->dupob->next) {
-						copy_m4_m4(iter->dupob->ob->obmat, iter->omat);
+					if (iter->dupli_refob) {
+						/* Restore last object's real matrix. */
+						copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+						iter->dupli_refob = NULL;
 					}
 					
 					free_object_duplilist(iter->duplilist);
 					iter->duplilist = NULL;
-					run_again = 1;
+					run_again = true;
 				}
 			}
 		}
@@ -1270,7 +1304,7 @@ static void scene_update_all_bases(EvaluationContext *eval_ctx, Scene *scene, Sc
 	for (base = scene->base.first; base; base = base->next) {
 		Object *object = base->object;
 
-		BKE_object_handle_update_ex(eval_ctx, scene_parent, object, scene->rigidbody_world);
+		BKE_object_handle_update_ex(eval_ctx, scene_parent, object, scene->rigidbody_world, true);
 
 		if (object->dup_group && (object->transflag & OB_DUPLIGROUP))
 			BKE_group_handle_recalc_and_update(eval_ctx, scene_parent, object, object->dup_group);
@@ -1304,9 +1338,11 @@ static void scene_update_object_func(TaskPool *pool, void *taskdata, int threadi
 		double start_time = 0.0;
 		bool add_to_stats = false;
 
-		PRINT("Thread %d: update object %s\n", threadid, object->id.name);
-
 		if (G.debug & G_DEBUG_DEPSGRAPH) {
+			if (object->recalc & OB_RECALC_ALL) {
+				printf("Thread %d: update object %s\n", threadid, object->id.name);
+			}
+
 			start_time = PIL_check_seconds_timer();
 
 			if (object->recalc & OB_RECALC_ALL) {
@@ -1319,7 +1355,7 @@ static void scene_update_object_func(TaskPool *pool, void *taskdata, int threadi
 		 * separately from main thread because of we've got no idea about
 		 * dependencies inside the group.
 		 */
-		BKE_object_handle_update_ex(eval_ctx, scene_parent, object, scene->rigidbody_world);
+		BKE_object_handle_update_ex(eval_ctx, scene_parent, object, scene->rigidbody_world, false);
 
 		/* Calculate statistics. */
 		if (add_to_stats) {
@@ -1335,7 +1371,7 @@ static void scene_update_object_func(TaskPool *pool, void *taskdata, int threadi
 	}
 	else {
 		PRINT("Threda %d: update node %s\n", threadid,
-		      DAG_get_node_name(node));
+		      DAG_get_node_name(scene, node));
 	}
 
 	/* Update will decrease child's valency and schedule child with zero valency. */
@@ -1437,41 +1473,13 @@ static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene
 	bool need_singlethread_pass;
 
 	/* Early check for whether we need to invoke all the task-based
-	 * tihngs (spawn new ppol, traverse dependency graph and so on).
+	 * things (spawn new ppol, traverse dependency graph and so on).
 	 *
 	 * Basically if there's no ID datablocks tagged for update which
 	 * corresponds to object->recalc flags (which are checked in
 	 * BKE_object_handle_update() then we do nothing here.
 	 */
 	if (!scene_need_update_objects(bmain)) {
-		/* For debug builds we check whether early return didn't give
-		 * us any regressions in terms of missing updates.
-		 *
-		 * TODO(sergey): Remove once we're sure the check above is correct.
-		 */
-#ifndef NDEBUG
-		Base *base;
-
-		for (base = scene->base.first; base; base = base->next) {
-			Object *object = base->object;
-
-			BLI_assert((object->recalc & OB_RECALC_ALL) == 0);
-
-			if (object->proxy) {
-				BLI_assert((object->proxy->recalc & OB_RECALC_ALL) == 0);
-			}
-
-			if (object->dup_group && (object->transflag & OB_DUPLIGROUP)) {
-				GroupObject *go;
-				for (go = object->dup_group->gobject.first; go; go = go->next) {
-					if (go->ob) {
-						BLI_assert((go->ob->recalc & OB_RECALC_ALL) == 0);
-					}
-				}
-			}
-		}
-#endif
-
 		return;
 	}
 
@@ -1584,10 +1592,10 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 			BKE_animsys_evaluate_animdata(scene, &scene->id, adt, ctime, 0);
 	}
 
-	/* Extra call here to recalc aterial animation.
+	/* Extra call here to recalc material animation.
 	 *
 	 * Need to do this so changing material settings from the graph/dopesheet
-	 * will update suff in the viewport.
+	 * will update stuff in the viewport.
 	 */
 	if (DAG_id_type_tagged(bmain, ID_MA)) {
 		Material *material;
@@ -1602,10 +1610,23 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 				BKE_animsys_evaluate_animdata(scene, &material->id, adt, ctime, 0);
 		}
 	}
-	
+
+	/* Also do the same for node trees. */
+	if (DAG_id_type_tagged(bmain, ID_NT)) {
+		float ctime = BKE_scene_frame_get(scene);
+
+		FOREACH_NODETREE(bmain, ntree, id)
+		{
+			AnimData *adt = BKE_animdata_from_id(&ntree->id);
+			if (adt && (adt->recalc & ADT_RECALC_ANIM))
+				BKE_animsys_evaluate_animdata(scene, &ntree->id, adt, ctime, 0);
+		}
+		FOREACH_NODETREE_END
+	}
+
 	/* notify editors and python about recalc */
 	BLI_callback_exec(bmain, &scene->id, BLI_CB_EVT_SCENE_UPDATE_POST);
-	DAG_ids_check_recalc(bmain, scene, FALSE);
+	DAG_ids_check_recalc(bmain, scene, false);
 
 	/* clear recalc flags */
 	DAG_ids_clear_recalc(bmain);
@@ -1688,7 +1709,7 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_SCENE_UPDATE_POST);
 	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_FRAME_CHANGE_POST);
 
-	DAG_ids_check_recalc(bmain, sce, TRUE);
+	DAG_ids_check_recalc(bmain, sce, true);
 
 	/* clear recalc flags */
 	DAG_ids_clear_recalc(bmain);
@@ -1893,4 +1914,3 @@ int BKE_scene_num_threads(const Scene *scene)
 {
 	return BKE_render_num_threads(&scene->r);
 }
-

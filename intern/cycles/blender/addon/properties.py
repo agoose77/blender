@@ -108,9 +108,10 @@ enum_integrator = (
     ('PATH', "Path Tracing", "Pure path tracing integrator"),
     )
 
-enum_volume_homogeneous_sampling = (
-    ('DISTANCE', "Distance", "Use Distance Sampling"),
-    ('EQUI_ANGULAR', "Equi-angular", "Use Equi-angular Sampling"),
+enum_volume_sampling = (
+    ('DISTANCE', "Distance", "Use distance sampling, best for dense volumes with lights far away"),
+    ('EQUIANGULAR', "Equiangular", "Use equiangular sampling, best for volumes with low density with light inside or near the volume"),
+    ('MULTIPLE_IMPORTANCE', "Multiple Importance", "Combine distance and equi-angular sampling for volumes where neither method is ideal"),
     )
 
 
@@ -144,13 +145,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 description="Method to sample lights and materials",
                 items=enum_integrator,
                 default='PATH',
-                )
-
-        cls.volume_homogeneous_sampling = EnumProperty(
-                name="Homogeneous Sampling",
-                description="Sampling method to use for homogeneous volumes",
-                items=enum_volume_homogeneous_sampling,
-                default='DISTANCE',
                 )
 
         cls.use_square_samples = BoolProperty(
@@ -236,7 +230,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 name="Volume Samples",
                 description="Number of volume scattering samples to render for each AA sample",
                 min=1, max=10000,
-                default=1,
+                default=0,
                 )
 
         cls.sampling_pattern = EnumProperty(
@@ -315,7 +309,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 name="Volume Bounces",
                 description="Maximum number of volumetric scattering events",
                 min=0, max=1024,
-                default=1,
+                default=0,
                 )
 
         cls.transparent_min_bounces = IntProperty(
@@ -471,6 +465,33 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 default=False,
                 )
 
+        cls.bake_type = EnumProperty(
+            name="Bake Type",
+            default='COMBINED',
+            description="Type of pass to bake",
+            items = (
+                ('COMBINED', "Combined", ""),
+                ('AO', "Ambient Occlusion", ""),
+                ('SHADOW', "Shadow", ""),
+                ('NORMAL', "Normal", ""),
+                ('UV', "UV", ""),
+                ('EMIT', "Emit", ""),
+                ('ENVIRONMENT', "Environment", ""),
+                ('DIFFUSE_DIRECT', "Diffuse Direct", ""),
+                ('DIFFUSE_INDIRECT', "Diffuse Indirect", ""),
+                ('DIFFUSE_COLOR', "Diffuse Color", ""),
+                ('GLOSSY_DIRECT', "Glossy Direct", ""),
+                ('GLOSSY_INDIRECT', "Glossy Indirect", ""),
+                ('GLOSSY_COLOR', "Glossy Color", ""),
+                ('TRANSMISSION_DIRECT', "Transmission Direct", ""),
+                ('TRANSMISSION_INDIRECT', "Transmission Indirect", ""),
+                ('TRANSMISSION_COLOR', "Transmission Color", ""),
+                ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
+                ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
+                ('SUBSURFACE_COLOR', "Subsurface Color", ""),
+                ),
+            )
+
     @classmethod
     def unregister(cls):
         del bpy.types.Scene.cycles
@@ -575,6 +596,12 @@ class CyclesMaterialSettings(bpy.types.PropertyGroup):
                             "(not using any textures), for faster rendering",
                 default=False,
                 )
+        cls.volume_sampling = EnumProperty(
+                name="Volume Sampling",
+                description="Sampling method to use for volumes",
+                items=enum_volume_sampling,
+                default='DISTANCE',
+                )
 
     @classmethod
     def unregister(cls):
@@ -644,6 +671,12 @@ class CyclesWorldSettings(bpy.types.PropertyGroup):
                 description="When using volume rendering, assume volume has the same density everywhere"
                             "(not using any textures), for faster rendering",
                 default=False,
+                )
+        cls.volume_sampling = EnumProperty(
+                name="Volume Sampling",
+                description="Sampling method to use for volumes",
+                items=enum_volume_sampling,
+                default='EQUIANGULAR',
                 )
 
     @classmethod
@@ -740,6 +773,41 @@ class CyclesMeshSettings(bpy.types.PropertyGroup):
         del bpy.types.Mesh.cycles
         del bpy.types.Curve.cycles
         del bpy.types.MetaBall.cycles
+
+
+class CyclesObjectBlurSettings(bpy.types.PropertyGroup):
+
+    @classmethod
+    def register(cls):
+
+        bpy.types.Object.cycles = PointerProperty(
+                name="Cycles Object Settings",
+                description="Cycles object settings",
+                type=cls,
+                )
+
+        cls.use_motion_blur = BoolProperty(
+                name="Use Motion Blur",
+                description="Use motion blur for this object",
+                default=True,
+                )
+
+        cls.use_deform_motion = BoolProperty(
+                name="Use Deformation Motion",
+                description="Use deformation motion blur for this object",
+                default=True,
+                )
+
+        cls.motion_steps = IntProperty(
+                name="Motion Steps",
+                description="Control accuracy of deformation motion blur, more steps gives more memory usage (actual number of steps is 2^(steps - 1))",
+                min=1, soft_max=8,
+                default=1,
+                )
+
+    @classmethod
+    def unregister(cls):
+        del bpy.types.Object.cycles
 
 
 class CyclesCurveRenderSettings(bpy.types.PropertyGroup):

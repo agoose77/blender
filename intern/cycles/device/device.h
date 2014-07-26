@@ -54,6 +54,7 @@ public:
 	bool display_device;
 	bool advanced_shading;
 	bool pack_images;
+	bool extended_images; /* flag for GPU and Multi device */
 	vector<DeviceInfo> multi_devices;
 
 	DeviceInfo()
@@ -64,10 +65,16 @@ public:
 		display_device = false;
 		advanced_shading = true;
 		pack_images = false;
+		extended_images = false;
 	}
 };
 
 /* Device */
+
+struct DeviceDrawParams {
+	boost::function<void(void)> bind_display_space_shader_cb;
+	boost::function<void(void)> unbind_display_space_shader_cb;
+};
 
 class Device {
 protected:
@@ -115,13 +122,15 @@ public:
 	virtual bool load_kernels(bool experimental) { return true; }
 
 	/* tasks */
+	virtual int get_split_task_count(DeviceTask& task) = 0;
 	virtual void task_add(DeviceTask& task) = 0;
 	virtual void task_wait() = 0;
 	virtual void task_cancel() = 0;
 	
 	/* opengl drawing */
 	virtual void draw_pixels(device_memory& mem, int y, int w, int h,
-		int dy, int width, int height, bool transparent);
+		int dy, int width, int height, bool transparent,
+		const DeviceDrawParams &draw_params);
 
 #ifdef WITH_NETWORK
 	/* networking */

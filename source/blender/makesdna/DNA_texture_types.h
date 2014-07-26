@@ -479,6 +479,7 @@ typedef struct ColorMapping {
 #define MTEX_BUMP_OBJECTSPACE	1024
 #define MTEX_BUMP_TEXTURESPACE	2048
 /* #define MTEX_BUMP_FLIPPED 	4096 */ /* UNUSED */
+#define MTEX_TIPS				4096  /* should use with_freestyle flag?  */
 #define MTEX_BICUBIC_BUMP		8192
 #define MTEX_MAPTO_BOUNDS		16384
 
@@ -584,7 +585,7 @@ typedef struct ColorMapping {
 #define TEX_VD_IMAGE_SEQUENCE	3
 #define TEX_VD_SMOKE			4
 /* for voxels which use VoxelData->source_path */
-#define TEX_VD_IS_SOURCE_PATH(_format) (ELEM3(_format, TEX_VD_BLENDERVOXEL, TEX_VD_RAW_8BIT, TEX_VD_RAW_16BIT))
+#define TEX_VD_IS_SOURCE_PATH(_format) (ELEM(_format, TEX_VD_BLENDERVOXEL, TEX_VD_RAW_8BIT, TEX_VD_RAW_16BIT))
 
 /* smoke data types */
 #define TEX_VD_SMOKEDENSITY		0

@@ -33,10 +33,8 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 builder = sys.argv[1]
-branch = ''
-
-if len(sys.argv) >= 3:
-    branch = sys.argv[2]
+# Never write branch if it is master.
+branch = sys.argv[2] if (len(sys.argv) >= 3 and sys.argv[2] != 'master') else ''
 
 # scons does own packaging
 if builder.find('scons') != -1:
@@ -99,8 +97,6 @@ if builder.find('scons') != -1:
             scons_options.append('BF_CYCLES_CUDA_NVCC=nvcc.exe')
             if builder.find('mingw') != -1:
                 scons_options.append('BF_TOOLSET=mingw')
-            if builder.endswith('vc2012'):
-                scons_options.append('MSVS_VERSION=11.0')
             if builder.endswith('vc2013'):
                 scons_options.append('MSVS_VERSION=12.0')
                 scons_options.append('MSVC_VERSION=12.0')

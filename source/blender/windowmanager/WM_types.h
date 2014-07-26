@@ -132,7 +132,7 @@ struct ImBuf;
 #define OPTYPE_PRESET		32	/* show preset menu */
 #define OPTYPE_INTERNAL		64	/* some operators are mainly for internal use
 								 * and don't make sense to be accessed from the
-								 * search menu, even if poll() returns TRUE.
+								 * search menu, even if poll() returns true.
 								 * currently only used for the search toolbox */
 #define OPTYPE_LOCK_BYPASS		128	/* Allow operator to run when interface is locked */
 
@@ -169,7 +169,7 @@ enum {
 #define KM_OSKEY2	128
 
 /* KM_MOD_ flags for wmKeyMapItem and wmEvent.alt/shift/oskey/ctrl  */
-/* note that KM_ANY and FALSE are used with these defines too */
+/* note that KM_ANY and false are used with these defines too */
 #define KM_MOD_FIRST  1
 #define KM_MOD_SECOND 2
 
@@ -189,9 +189,6 @@ enum {
 
 #define WM_UI_HANDLER_CONTINUE	0
 #define WM_UI_HANDLER_BREAK		1
-
-typedef int (*wmUIHandlerFunc)(struct bContext *C, const struct wmEvent *event, void *userdata);
-typedef void (*wmUIHandlerRemoveFunc)(struct bContext *C, void *userdata);
 
 /* ************** Notifiers ****************** */
 
@@ -600,6 +597,12 @@ typedef struct wmReport {
 #define WM_DRAG_PATH	2
 #define WM_DRAG_NAME	3
 #define WM_DRAG_VALUE	4
+#define WM_DRAG_COLOR	5
+
+typedef enum wmDragFlags {
+	WM_DRAG_NOP         = 0,
+	WM_DRAG_FREE_DATA   = 1,
+} wmDragFlags;
 
 /* note: structs need not exported? */
 
@@ -616,6 +619,7 @@ typedef struct wmDrag {
 	int sx, sy;
 	
 	char opname[200]; /* if set, draws operator name*/
+	unsigned int flags;
 } wmDrag;
 
 /* dropboxes are like keymaps, part of the screen/area/region definition */

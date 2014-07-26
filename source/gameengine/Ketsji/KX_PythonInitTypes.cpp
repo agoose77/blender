@@ -97,6 +97,7 @@
 #include "SCA_RandomActuator.h"
 #include "SCA_IController.h"
 #include "KX_NavMeshObject.h"
+#include "KX_MouseActuator.h"
 #include "KX_PythonLogicLoop.h"
 
 static void PyType_Attr_Set(PyGetSetDef *attr_getset, PyAttributeDef *attr)
@@ -229,6 +230,7 @@ void initPyTypes(void)
 		PyType_Ready_Attr(dict, KX_VehicleWrapper, init_getset);
 		PyType_Ready_Attr(dict, KX_VertexProxy, init_getset);
 		PyType_Ready_Attr(dict, KX_VisibilityActuator, init_getset);
+		PyType_Ready_Attr(dict, KX_MouseActuator, init_getset);
 		PyType_Ready_Attr(dict, PyObjectPlus, init_getset);
 		PyType_Ready_Attr(dict, SCA_2DFilterActuator, init_getset);
 		PyType_Ready_Attr(dict, SCA_ANDController, init_getset);

@@ -71,7 +71,6 @@
 
 #include "BKE_displist.h"
 #include "BKE_particle.h"
-#include "BKE_object.h"
 #include "BKE_material.h"
 #include "BKE_key.h"
 #include "BKE_library.h"
@@ -843,7 +842,7 @@ int psys_render_simplify_distribution(ParticleThreadContext *ctx, int tot)
 	if (data->elems)
 		MEM_freeN(data->elems);
 
-	data->do_simplify = TRUE;
+	data->do_simplify = true;
 	data->elems = elems;
 	data->index_mf_to_mpoly = index_mf_to_mpoly;
 	data->index_mp_to_orig  = index_mp_to_orig;
@@ -974,7 +973,7 @@ int psys_render_simplify_distribution(ParticleThreadContext *ctx, int tot)
 	return newtot;
 }
 
-int psys_render_simplify_params(ParticleSystem *psys, ChildParticle *cpa, float *params)
+bool psys_render_simplify_params(ParticleSystem *psys, ChildParticle *cpa, float *params)
 {
 	ParticleRenderData *data;
 	ParticleRenderElem *elem;
@@ -1658,11 +1657,14 @@ int psys_particle_dm_face_lookup(Object *ob, DerivedMesh *dm, int index, const f
 		index_mp_to_orig = NULL;
 	}
 
+	totface = dm->getNumTessFaces(dm);
+	if (!totface) {
+		return DMCACHE_NOTFOUND;
+	}
+
 	mpoly = dm->getPolyArray(dm);
 	osface = dm->getTessFaceDataArray(dm, CD_ORIGSPACE);
 
-	totface = dm->getNumTessFaces(dm);
-	
 	if (osface == NULL || index_mf_to_mpoly == NULL) {
 		/* Assume we don't need osface data */
 		if (index < totface) {
@@ -1908,7 +1910,7 @@ void psys_particle_on_emitter(ParticleSystemModifierData *psmd, int from, int in
                               float fuv[4], float foffset, float vec[3], float nor[3], float utan[3], float vtan[3],
                               float orco[3], float ornor[3])
 {
-	if (psmd) {
+	if (psmd && psmd->dm) {
 		if (psmd->psys->part->distr == PART_DISTR_GRID && psmd->psys->part->from != PART_FROM_VERT) {
 			if (vec)
 				copy_v3_v3(vec, fuv);
@@ -2667,6 +2669,9 @@ static void psys_thread_create_path(ParticleThread *thread, struct ChildParticle
 		/* get the original coordinates (orco) for texture usage */
 		cpa_from = part->from;
 		cpa_num = pa->num;
+		/* XXX hack to avoid messed up particle num and subsequent crash (#40733) */
+		if (cpa_num > ctx->sim.psmd->dm->getNumTessFaces(ctx->sim.psmd->dm))
+			cpa_num = 0;
 		cpa_fuv = pa->fuv;
 
 		psys_particle_on_emitter(ctx->sim.psmd, cpa_from, cpa_num, DMCACHE_ISCHILD, cpa_fuv, pa->foffset, co, ornor, 0, 0, orco, 0);
@@ -3710,7 +3715,7 @@ void BKE_particlesettings_make_local(ParticleSettings *part)
 {
 	Main *bmain = G.main;
 	Object *ob;
-	int is_local = FALSE, is_lib = FALSE;
+	bool is_local = false, is_lib = false;
 
 	/* - only lib users: do nothing
 	 * - only local users: set flag
@@ -3725,17 +3730,17 @@ void BKE_particlesettings_make_local(ParticleSettings *part)
 	}
 
 	/* test objects */
-	for (ob = bmain->object.first; ob && ELEM(FALSE, is_lib, is_local); ob = ob->id.next) {
+	for (ob = bmain->object.first; ob && ELEM(false, is_lib, is_local); ob = ob->id.next) {
 		ParticleSystem *psys = ob->particlesystem.first;
 		for (; psys; psys = psys->next) {
 			if (psys->part == part) {
-				if (ob->id.lib) is_lib = TRUE;
-				else is_local = TRUE;
+				if (ob->id.lib) is_lib = true;
+				else is_local = true;
 			}
 		}
 	}
 	
-	if (is_local && is_lib == FALSE) {
+	if (is_local && is_lib == false) {
 		id_clear_lib_data(bmain, &part->id);
 		expand_local_particlesettings(part);
 	}
@@ -3779,7 +3784,7 @@ static int get_particle_uv(DerivedMesh *dm, ParticleData *pa, int face_index, co
 		return 0;
 
 	if (pa) {
-		i = (pa->num_dmcache == DMCACHE_NOTFOUND) ? pa->num : pa->num_dmcache;
+		i = ELEM(pa->num_dmcache, DMCACHE_NOTFOUND, DMCACHE_ISCHILD) ? pa->num : pa->num_dmcache;
 		if (i >= dm->getNumTessFaces(dm))
 			i = -1;
 	}
@@ -3888,6 +3893,8 @@ static void get_cpa_texture(DerivedMesh *dm, ParticleSystem *psys, ParticleSetti
 }
 void psys_get_texture(ParticleSimulationData *sim, ParticleData *pa, ParticleTexture *ptex, int event, float cfra)
 {
+	Object *ob = sim->ob;
+	Mesh *me = (Mesh *)ob->data;
 	ParticleSettings *part = sim->psys->part;
 	MTex **mtexp = part->mtex;
 	MTex *mtex;
@@ -3927,6 +3934,14 @@ void psys_get_texture(ParticleSimulationData *sim, ParticleData *pa, ParticleTex
 				/* no break, failed to get uv's, so let's try orco's */
 				case TEXCO_ORCO:
 					psys_particle_on_emitter(sim->psmd, sim->psys->part->from, pa->num, pa->num_dmcache, pa->fuv, pa->foffset, co, 0, 0, 0, texvec, 0);
+					
+					if (me->bb == NULL || (me->bb->flag & BOUNDBOX_DIRTY)) {
+						BKE_mesh_texspace_calc(me);
+					}
+					sub_v3_v3(texvec, me->loc);
+					if (me->size[0] != 0.0f) texvec[0] /= me->size[0];
+					if (me->size[1] != 0.0f) texvec[1] /= me->size[1];
+					if (me->size[2] != 0.0f) texvec[2] /= me->size[2];
 					break;
 				case TEXCO_PARTICLE:
 					/* texture coordinates in range [-1, 1] */
@@ -4103,7 +4118,7 @@ static void do_child_modifiers(ParticleSimulationData *sim, ParticleTexture *pte
 	}
 }
 /* get's hair (or keyed) particles state at the "path time" specified in state->time */
-void psys_get_particle_on_path(ParticleSimulationData *sim, int p, ParticleKey *state, int vel)
+void psys_get_particle_on_path(ParticleSimulationData *sim, int p, ParticleKey *state, const bool vel)
 {
 	PARTICLE_PSMD;
 	ParticleSystem *psys = sim->psys;

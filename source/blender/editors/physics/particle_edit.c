@@ -48,7 +48,6 @@
 #include "BLI_lasso.h"
 #include "BLI_listbase.h"
 #include "BLI_string.h"
-#include "BLI_dynstr.h"
 #include "BLI_kdtree.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
@@ -62,7 +61,6 @@
 #include "BKE_modifier.h"
 #include "BKE_particle.h"
 #include "BKE_report.h"
-#include "BKE_scene.h"
 
 #include "BKE_pointcache.h"
 
@@ -618,7 +616,10 @@ static void foreach_mouse_hit_key(PEData *data, ForKeyMatFunc func, int selected
 	ParticleSystemModifierData *psmd = NULL;
 	ParticleEditSettings *pset= PE_settings(data->scene);
 	POINT_P; KEY_K;
-	float mat[4][4] = MAT4_UNITY, imat[4][4] = MAT4_UNITY;
+	float mat[4][4], imat[4][4];
+
+	unit_m4(mat);
+	unit_m4(imat);
 
 	if (edit->psys)
 		psmd= psys_get_modifier(data->ob, edit->psys);
@@ -1712,10 +1713,12 @@ int PE_lasso_select(bContext *C, const int mcords[][2], const short moves, bool 
 	ParticleSystem *psys = edit->psys;
 	ParticleSystemModifierData *psmd = psys_get_modifier(ob, psys);
 	POINT_P; KEY_K;
-	float co[3], mat[4][4] = MAT4_UNITY;
+	float co[3], mat[4][4];
 	int screen_co[2];
 
 	PEData data;
+
+	unit_m4(mat);
 
 	if (!PE_start_edit(edit))
 		return OPERATOR_CANCELLED;
@@ -2788,6 +2791,11 @@ static void PE_mirror_x(Scene *scene, Object *ob, int tagged)
 			newpa->num= mirrorfaces[pa->num*2];
 			newpa->num_dmcache= psys_particle_dm_face_lookup(ob, psmd->dm, newpa->num, newpa->fuv, NULL);
 
+			if ((newpa->num_dmcache != DMCACHE_NOTFOUND) && psys->part->use_modifier_stack && !psmd->dm->deformedOnly) {
+				newpa->num = newpa->num_dmcache;
+				newpa->num_dmcache = DMCACHE_ISCHILD;
+			}
+
 			/* update edit key pointers */
 			key= newpoint->keys;
 			for (k=0, hkey=newpa->hair; k<newpa->totkey; k++, hkey++, key++) {
@@ -3351,6 +3359,10 @@ static int brush_add(PEData *data, short number)
 	short size2= size*size;
 	DerivedMesh *dm=0;
 	RNG *rng;
+	const int *index_mf_to_mpoly;
+	const int *index_mp_to_orig;
+	bool release_dm = false;
+
 	invert_m4_m4(imat, ob->obmat);
 
 	if (psys->flag & PSYS_GLOBAL_HAIR)
@@ -3367,11 +3379,15 @@ static int brush_add(PEData *data, short number)
 
 	timestep= psys_get_timestep(&sim);
 
-	/* painting onto the deformed mesh, could be an option? */
-	if (psmd->dm->deformedOnly)
-		dm= psmd->dm;
-	else
-		dm= mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+	if (psmd->dm->deformedOnly || psys->part->use_modifier_stack)
+		dm = psmd->dm;
+	else {
+		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+		release_dm = true;
+	}
+
+	index_mf_to_mpoly = dm->getTessFaceDataArray(dm, CD_ORIGINDEX);
+	index_mp_to_orig  = dm->getPolyDataArray(dm, CD_ORIGINDEX);
 
 	for (i=0; i<number; i++) {
 		if (number>1) {
@@ -3398,9 +3414,19 @@ static int brush_add(PEData *data, short number)
 		min_d=2.0;
 		
 		/* warning, returns the derived mesh face */
-		if (particle_intersect_dm(scene, ob, dm, 0, co1, co2, &min_d, &add_pars[n].num, add_pars[n].fuv, 0, 0, 0, 0)) {
-			add_pars[n].num_dmcache= psys_particle_dm_face_lookup(ob, psmd->dm, add_pars[n].num, add_pars[n].fuv, NULL);
-			n++;
+		if (particle_intersect_dm(scene, ob, dm, 0, co1, co2, &min_d, &add_pars[n].num_dmcache, add_pars[n].fuv, 0, 0, 0, 0)) {
+			if (index_mf_to_mpoly && index_mp_to_orig)
+				add_pars[n].num = DM_origindex_mface_mpoly(index_mf_to_mpoly, index_mp_to_orig, add_pars[n].num_dmcache);
+			else
+				add_pars[n].num = add_pars[n].num_dmcache;
+
+			if (psys_particle_dm_face_lookup(ob, psmd->dm, add_pars[n].num_dmcache, add_pars[n].fuv, NULL) != DMCACHE_NOTFOUND) {
+				if (psys->part->use_modifier_stack && !psmd->dm->deformedOnly) {
+					add_pars[n].num = add_pars[n].num_dmcache;
+					add_pars[n].num_dmcache = DMCACHE_ISCHILD;
+				}
+				n++;
+			}
 		}
 	}
 	if (n) {
@@ -3461,7 +3487,7 @@ static int brush_add(PEData *data, short number)
 			}
 			
 			pa->size= 1.0f;
-			initialize_particle(pa);
+			initialize_particle(&sim, pa);
 			reset_particle(&sim, pa, 0.0, 1.0);
 			point->flag |= PEP_EDIT_RECALC;
 			if (pe_x_mirror(ob))
@@ -3553,10 +3579,10 @@ static int brush_add(PEData *data, short number)
 	}
 
 	MEM_freeN(add_pars);
-	
-	if (!psmd->dm->deformedOnly)
+
+	if (release_dm)
 		dm->release(dm);
-	
+
 	BLI_rng_free(rng);
 	
 	return n;
@@ -3865,7 +3891,7 @@ static void brush_edit_apply_event(bContext *C, wmOperator *op, const wmEvent *e
 	RNA_collection_add(op->ptr, "stroke", &itemptr);
 
 	RNA_float_set_array(&itemptr, "mouse", mouse);
-	RNA_boolean_set(&itemptr, "pen_flip", event->shift != FALSE); // XXX hardcoded
+	RNA_boolean_set(&itemptr, "pen_flip", event->shift != false); // XXX hardcoded
 
 	/* apply */
 	brush_edit_apply(C, op, &itemptr);
@@ -4243,7 +4269,7 @@ int PE_minmax(Scene *scene, float min[3], float max[3])
 	}
 
 	if (!ok) {
-		BKE_object_minmax(ob, min, max, TRUE);
+		BKE_object_minmax(ob, min, max, true);
 		ok= 1;
 	}
 

@@ -62,6 +62,7 @@
 #include "ED_node.h"
 
 #include "IMB_colormanagement.h"
+#include "IMB_imbuf.h"
 
 static int rna_CurveMapping_curves_length(PointerRNA *ptr)
 {
@@ -89,7 +90,7 @@ static void rna_CurveMapping_clip_set(PointerRNA *ptr, int value)
 	if (value) cumap->flag |= CUMA_DO_CLIP;
 	else cumap->flag &= ~CUMA_DO_CLIP;
 
-	curvemapping_changed(cumap, FALSE);
+	curvemapping_changed(cumap, false);
 }
 
 static void rna_CurveMapping_black_level_set(PointerRNA *ptr, const float *values)
@@ -175,7 +176,7 @@ static char *rna_ColorRamp_path(PointerRNA *ptr)
 				char *node_path;
 				
 				for (node = ntree->nodes.first; node; node = node->next) {
-					if (ELEM3(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
+					if (ELEM(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
 						if (node->storage == ptr->data) {
 							/* all node color ramp properties called 'color_ramp'
 							 * prepend path from ID to the node
@@ -192,7 +193,7 @@ static char *rna_ColorRamp_path(PointerRNA *ptr)
 			
 			case ID_LS:
 			{
-				char *path = BKE_path_from_ID_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
+				char *path = BKE_linestyle_path_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
 				if (path)
 					return path;
 				break;
@@ -264,7 +265,7 @@ static char *rna_ColorRampElement_path(PointerRNA *ptr)
 				bNode *node;
 				
 				for (node = ntree->nodes.first; node; node = node->next) {
-					if (ELEM3(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
+					if (ELEM(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
 						RNA_pointer_create(id, &RNA_ColorRamp, node->storage, &ramp_ptr);
 						COLRAMP_GETPATH;
 					}
@@ -276,7 +277,7 @@ static char *rna_ColorRampElement_path(PointerRNA *ptr)
 				ListBase listbase;
 				LinkData *link;
 
-				BKE_list_modifier_color_ramps((FreestyleLineStyle *)id, &listbase);
+				BKE_linestyle_modifier_list_color_ramps((FreestyleLineStyle *)id, &listbase);
 				for (link = (LinkData *)listbase.first; link; link = link->next) {
 					RNA_pointer_create(id, &RNA_ColorRamp, link->data, &ramp_ptr);
 					COLRAMP_GETPATH;
@@ -323,7 +324,7 @@ static void rna_ColorRamp_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *
 				bNode *node;
 
 				for (node = ntree->nodes.first; node; node = node->next) {
-					if (ELEM3(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
+					if (ELEM(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
 						ED_node_tag_update_nodetree(bmain, ntree);
 					}
 				}
@@ -369,7 +370,7 @@ static void rna_ColorRampElement_remove(struct ColorBand *coba, ReportList *repo
 {
 	CBData *element = element_ptr->data;
 	int index = (int)(element - coba->data);
-	if (colorband_element_remove(coba, index) == FALSE) {
+	if (colorband_element_remove(coba, index) == false) {
 		BKE_report(reports, RPT_ERROR, "Element not found in element collection or last element");
 		return;
 	}
@@ -380,7 +381,7 @@ static void rna_ColorRampElement_remove(struct ColorBand *coba, ReportList *repo
 void rna_CurveMap_remove_point(CurveMap *cuma, ReportList *reports, PointerRNA *point_ptr)
 {
 	CurveMapPoint *point = point_ptr->data;
-	if (curvemap_remove_point(cuma, point) == FALSE) {
+	if (curvemap_remove_point(cuma, point) == false) {
 		BKE_report(reports, RPT_ERROR, "Unable to remove curve point");
 		return;
 	}
@@ -595,13 +596,13 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *UNUSED(bmain)
 		if (scene->ed) {
 			ColorManagedColorspaceSettings *colorspace_settings = (ColorManagedColorspaceSettings *) ptr->data;
 			Sequence *seq;
-			int seq_found = FALSE;
+			bool seq_found = false;
 
 			if (&scene->sequencer_colorspace_settings != colorspace_settings) {
 				SEQ_BEGIN(scene->ed, seq);
 				{
 					if (seq->strip && &seq->strip->colorspace_settings == colorspace_settings) {
-						seq_found = TRUE;
+						seq_found = true;
 						break;
 					}
 				}
@@ -609,10 +610,24 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *UNUSED(bmain)
 			}
 
 			if (seq_found) {
+				if (seq->anim) {
+					IMB_free_anim(seq->anim);
+					seq->anim = NULL;
+				}
+
 				BKE_sequence_invalidate_cache(scene, seq);
 				BKE_sequencer_preprocessed_cache_cleanup_sequence(seq);
 			}
 			else {
+				SEQ_BEGIN(scene->ed, seq);
+				{
+					if (seq->anim) {
+						IMB_free_anim(seq->anim);
+						seq->anim = NULL;
+					}
+				}
+				SEQ_END;
+
 				BKE_sequencer_cache_cleanup();
 				BKE_sequencer_preprocessed_cache_cleanup();
 			}
@@ -801,13 +816,15 @@ static void rna_def_curvemapping(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "black_level", PROP_FLOAT, PROP_COLOR);
 	RNA_def_property_float_sdna(prop, NULL, "black");
-	RNA_def_property_range(prop, -1000.0f, 1000.0f);
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 1, 3);
 	RNA_def_property_ui_text(prop, "Black Level", "For RGB curves, the color that black is mapped to");
 	RNA_def_property_float_funcs(prop, NULL, "rna_CurveMapping_black_level_set", NULL);
 
 	prop = RNA_def_property(srna, "white_level", PROP_FLOAT, PROP_COLOR);
 	RNA_def_property_float_sdna(prop, NULL, "white");
-	RNA_def_property_range(prop, -1000.0f, 1000.0f);
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 1, 3);
 	RNA_def_property_ui_text(prop, "White Level", "For RGB curves, the color that white is mapped to");
 	RNA_def_property_float_funcs(prop, NULL, "rna_CurveMapping_white_level_set", NULL);
 

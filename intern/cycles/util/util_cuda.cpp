@@ -149,6 +149,7 @@ tcuGLCtxCreate *cuGLCtxCreate;
 tcuGraphicsGLRegisterBuffer *cuGraphicsGLRegisterBuffer;
 tcuGraphicsGLRegisterImage *cuGraphicsGLRegisterImage;
 tcuCtxSetCurrent *cuCtxSetCurrent;
+tcuLaunchKernel *cuLaunchKernel;
 
 CCL_NAMESPACE_BEGIN
 
@@ -180,15 +181,21 @@ bool cuLibraryInit()
 #ifdef _WIN32
 	/* expected in c:/windows/system or similar, no path needed */
 	const char *path = "nvcuda.dll";
+	const char *alternative_path = NULL;
 #elif defined(__APPLE__)
 	/* default installation path */
 	const char *path = "/usr/local/cuda/lib/libcuda.dylib";
+	const char *alternative_path = NULL;
 #else
 	const char *path = "libcuda.so";
+	const char *alternative_path = "libcuda.so.1";
 #endif
 
 	/* load library */
 	DynamicLibrary *lib = dynamic_library_open(path);
+
+	if(lib == NULL && alternative_path)
+		lib = dynamic_library_open(alternative_path);
 
 	if(lib == NULL)
 		return false;
@@ -380,6 +387,7 @@ bool cuLibraryInit()
 
 	/* cuda 4.0 */
 	CUDA_LIBRARY_FIND(cuCtxSetCurrent);
+	CUDA_LIBRARY_FIND(cuLaunchKernel);
 
 	if(cuHavePrecompiledKernels())
 		result = true;

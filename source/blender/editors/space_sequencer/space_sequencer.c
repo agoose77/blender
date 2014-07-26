@@ -38,7 +38,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
@@ -47,7 +46,6 @@
 #include "BKE_global.h"
 
 #include "ED_space_api.h"
-#include "ED_sequencer.h"
 #include "ED_screen.h"
 #include "ED_view3d.h" /* only for sequencer view3d drawing callback */
 
@@ -398,7 +396,7 @@ static int movie_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 	int hand;
 
 	if (drag->type == WM_DRAG_PATH)
-		if (ELEM3(drag->icon, 0, ICON_FILE_MOVIE, ICON_FILE_BLANK)) /* rule might not work? */
+		if (ELEM(drag->icon, 0, ICON_FILE_MOVIE, ICON_FILE_BLANK)) /* rule might not work? */
 			if (find_nearest_seq(scene, &ar->v2d, &hand, event->mval) == NULL)
 				return 1;
 	return 0;
@@ -458,17 +456,17 @@ static int sequencer_context(const bContext *C, const char *member, bContextData
 	if (CTX_data_dir(member)) {
 		CTX_data_dir_set(result, sequencer_context_dir);
 
-		return TRUE;
+		return true;
 	}
 	else if (CTX_data_equals(member, "edit_mask")) {
 		Mask *mask = BKE_sequencer_mask_get(scene);
 		if (mask) {
 			CTX_data_id_pointer_set(result, &mask->id);
 		}
-		return TRUE;
+		return true;
 	}
 
-	return FALSE;
+	return false;
 }
 
 

@@ -84,6 +84,7 @@ typedef struct ViewDepths {
 
 float *ED_view3d_cursor3d_get(struct Scene *scene, struct View3D *v3d);
 void   ED_view3d_cursor3d_position(struct bContext *C, float fp[3], const int mval[2]);
+void   ED_view3d_cursor3d_update(struct bContext *C, const int mval[2]);
 
 struct Camera *ED_view3d_camera_data_get(struct View3D *v3d, struct RegionView3D *rv3d);
 
@@ -92,6 +93,8 @@ void ED_view3d_from_m4(float mat[4][4], float ofs[3], float quat[4], float *dist
 
 void ED_view3d_from_object(struct Object *ob, float ofs[3], float quat[4], float *dist, float *lens);
 void ED_view3d_to_object(struct Object *ob, const float ofs[3], const float quat[4], const float dist);
+
+void ED_view3d_lastview_store(struct RegionView3D *rv3d);
 
 /* Depth buffer */
 void  ED_view3d_depth_update(struct ARegion *ar);
@@ -267,7 +270,7 @@ bool ED_view3d_autodist_depth_seg(struct ARegion *ar, const int mval_sta[2], con
 
 /* select */
 #define MAXPICKBUF      10000
-short view3d_opengl_select(struct ViewContext *vc, unsigned int *buffer, unsigned int bufsize, rcti *input);
+short view3d_opengl_select(struct ViewContext *vc, unsigned int *buffer, unsigned int bufsize, const rcti *input, bool do_nearest);
 
 /* view3d_select.c */
 float ED_view3d_select_dist_px(void);
@@ -327,8 +330,15 @@ bool ED_view3d_camera_lock_check(struct View3D *v3d, struct RegionView3D *rv3d);
 /* copy the camera to the view before starting a view transformation */
 void ED_view3d_camera_lock_init_ex(struct View3D *v3d, struct RegionView3D *rv3d, const bool calc_dist);
 void ED_view3d_camera_lock_init(struct View3D *v3d, struct RegionView3D *rv3d);
-/* copy the view to the camera, return TRUE if */
+/* copy the view to the camera, return true if */
 bool ED_view3d_camera_lock_sync(struct View3D *v3d, struct RegionView3D *rv3d);
+
+bool ED_view3d_camera_autokey(
+        struct Scene *scene, struct ID *id_key,
+        struct bContext *C, const bool do_rotate, const bool do_translate);
+bool ED_view3d_camera_lock_autokey(
+        struct View3D *v3d, struct RegionView3D *rv3d,
+        struct bContext *C, const bool do_rotate, const bool do_translate);
 
 void ED_view3D_lock_clear(struct View3D *v3d);
 
@@ -344,7 +354,7 @@ void  ED_view3d_distance_set(struct RegionView3D *rv3d, const float dist);
 float ED_scene_grid_scale(struct Scene *scene, const char **grid_unit);
 float ED_view3d_grid_scale(struct Scene *scene, struct View3D *v3d, const char **grid_unit);
 
-void ED_scene_draw_fps(struct Scene *scene, struct rcti *rect);
+void ED_scene_draw_fps(struct Scene *scene, const struct rcti *rect);
 
 /* view matrix properties utilities */
 /* unused */

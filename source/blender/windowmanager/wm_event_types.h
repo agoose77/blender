@@ -38,7 +38,7 @@
 /* customdata type */
 #define EVT_DATA_GESTURE        1
 #define EVT_DATA_TIMER          2
-#define EVT_DATA_LISTBASE       3
+#define EVT_DATA_DRAGDROP       3
 #define EVT_DATA_NDOF_MOTION    4
 
 /* tablet active, matches GHOST_TTabletMode */
@@ -312,8 +312,8 @@ enum {
 #define ISHOTKEY(event_type)                                                  \
 	((ISKEYBOARD(event_type) || ISMOUSE(event_type) || ISNDOF(event_type)) && \
 	 (event_type != ESCKEY) &&                                                \
-	 (event_type >= LEFTCTRLKEY && event_type <= LEFTSHIFTKEY) == FALSE &&    \
-	 (event_type >= UNKNOWNKEY  && event_type <= GRLESSKEY) == FALSE)
+	 (event_type >= LEFTCTRLKEY && event_type <= LEFTSHIFTKEY) == false &&    \
+	 (event_type >= UNKNOWNKEY  && event_type <= GRLESSKEY) == false)
 
 /* **************** BLENDER GESTURE EVENTS (0x5000) **************** */
 

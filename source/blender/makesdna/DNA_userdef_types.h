@@ -154,7 +154,6 @@ typedef struct uiGradientColors {
 	char high_gradient[4];
 	int show_grad;
 	int pad2;
-
 } uiGradientColors;
 
 typedef struct ThemeUI {
@@ -328,6 +327,9 @@ typedef struct ThemeSpace {
 	char info_warning[4], info_warning_text[4];
 	char info_info[4], info_info_text[4];
 	char info_debug[4], info_debug_text[4];
+
+	char paint_curve_pivot[4];
+	char paint_curve_handle[4];
 } ThemeSpace;
 
 
@@ -422,6 +424,8 @@ typedef struct UserDef {
 	char tempdir[768];	/* FILE_MAXDIR length */
 	char fontdir[768];
 	char renderdir[1024]; /* FILE_MAX length */
+	/* EXR cache path */
+	char render_cachedir[768];  /* 768 = FILE_MAXDIR */
 	char textudir[768];
 	char pythondir[768];
 	char sounddir[768];
@@ -485,8 +489,10 @@ typedef struct UserDef {
 	short glreslimit;
 	short curssize;
 	short color_picker_type;
-	short ipo_new;			/* interpolation mode for newly added F-Curves */
-	short keyhandles_new;	/* handle types for newly added keyframes */
+	char  ipo_new;			/* interpolation mode for newly added F-Curves */
+	char  keyhandles_new;	/* handle types for newly added keyframes */
+	char  gpu_select_method;
+	char  pad1;
 
 	short scrcastfps;		/* frame rate for screencast to be played back */
 	short scrcastwait;		/* milliseconds between screencast snapshots */
@@ -519,6 +525,8 @@ typedef struct UserDef {
 	char navigation_mode, pad;
 
 	char author[80];	/* author name for file formats supporting it */
+
+	char font_path_ui[1024];
 
 	int compute_device_type;
 	int compute_device_id;
@@ -710,6 +718,13 @@ typedef enum eOpenGL_RenderingOptions {
 	USER_DISABLE_VBO		= (1 << 3),
 	/* USER_DISABLE_AA			= (1 << 4), */ /* DEPRECATED */
 } eOpenGL_RenderingOptions;
+
+/* selection method for opengl gpu_select_method */
+typedef enum eOpenGL_SelectOptions {
+	USER_SELECT_AUTO = 0,
+	USER_SELECT_USE_OCCLUSION_QUERY = 1,
+	USER_SELECT_USE_SELECT_RENDERMODE = 2
+} eOpenGL_SelectOptions;
 
 /* wm draw method */
 typedef enum eWM_DrawMethod {

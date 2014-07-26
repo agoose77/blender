@@ -274,71 +274,148 @@ void mul_m4_m3m4(float m1[4][4], float m3_[3][3], float m2_[4][4])
 	m1[2][2] = m2[2][0] * m3[0][2] + m2[2][1] * m3[1][2] + m2[2][2] * m3[2][2];
 }
 
-void mul_serie_m3(float answ[3][3],
-                  float m1[3][3], float m2[3][3], float m3[3][3],
-                  float m4[3][3], float m5[3][3], float m6[3][3],
-                  float m7[3][3], float m8[3][3])
+
+/** \name Macro helpers for: mul_m3_series
+ * \{ */
+void _va_mul_m3_series_3(
+        float r[3][3],
+        float m1[3][3], float m2[3][3])
 {
-	float temp[3][3];
-
-	if (m1 == NULL || m2 == NULL) return;
-
-	mul_m3_m3m3(answ, m2, m1);
-	if (m3) {
-		mul_m3_m3m3(temp, m3, answ);
-		if (m4) {
-			mul_m3_m3m3(answ, m4, temp);
-			if (m5) {
-				mul_m3_m3m3(temp, m5, answ);
-				if (m6) {
-					mul_m3_m3m3(answ, m6, temp);
-					if (m7) {
-						mul_m3_m3m3(temp, m7, answ);
-						if (m8) {
-							mul_m3_m3m3(answ, m8, temp);
-						}
-						else copy_m3_m3(answ, temp);
-					}
-				}
-				else copy_m3_m3(answ, temp);
-			}
-		}
-		else copy_m3_m3(answ, temp);
-	}
+	mul_m3_m3m3(r, m1, m2);
 }
-
-void mul_serie_m4(float answ[4][4], float m1[4][4],
-                  float m2[4][4], float m3[4][4], float m4[4][4],
-                  float m5[4][4], float m6[4][4], float m7[4][4],
-                  float m8[4][4])
+void _va_mul_m3_series_4(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3])
 {
-	float temp[4][4];
-
-	if (m1 == NULL || m2 == NULL) return;
-
-	mul_m4_m4m4(answ, m1, m2);
-	if (m3) {
-		mul_m4_m4m4(temp, answ, m3);
-		if (m4) {
-			mul_m4_m4m4(answ, temp, m4);
-			if (m5) {
-				mul_m4_m4m4(temp, answ, m5);
-				if (m6) {
-					mul_m4_m4m4(answ, temp, m6);
-					if (m7) {
-						mul_m4_m4m4(temp, answ, m7);
-						if (m8) {
-							mul_m4_m4m4(answ, temp, m8);
-						}
-						else copy_m4_m4(answ, temp);
-					}
-				}
-				else copy_m4_m4(answ, temp);
-			}
-		}
-		else copy_m4_m4(answ, temp);
-	}
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
 }
+void _va_mul_m3_series_5(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+}
+void _va_mul_m3_series_6(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+}
+void _va_mul_m3_series_7(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+}
+void _va_mul_m3_series_8(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3], float m7[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+	mul_m3_m3m3(r, r, m7);
+}
+void _va_mul_m3_series_9(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3], float m7[3][3], float m8[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+	mul_m3_m3m3(r, r, m7);
+	mul_m3_m3m3(r, r, m8);
+}
+/** \} */
+
+/** \name Macro helpers for: mul_m4_series
+ * \{ */
+void _va_mul_m4_series_3(
+        float r[4][4],
+        float m1[4][4], float m2[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+}
+void _va_mul_m4_series_4(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+}
+void _va_mul_m4_series_5(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+}
+void _va_mul_m4_series_6(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+}
+void _va_mul_m4_series_7(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+}
+void _va_mul_m4_series_8(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4], float m7[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+	mul_m4_m4m4(r, r, m7);
+}
+void _va_mul_m4_series_9(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4], float m7[4][4], float m8[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+	mul_m4_m4m4(r, r, m7);
+	mul_m4_m4m4(r, r, m8);
+}
+/** \} */
 
 void mul_v2_m3v2(float r[2], float m[3][3], float v[2])
 {
@@ -519,7 +596,6 @@ void mul_transposed_mat3_m4_v3(float mat[4][4], float vec[3])
 	vec[2] = x * mat[2][0] + y * mat[2][1] + mat[2][2] * vec[2];
 }
 
-
 void mul_m3_fl(float m[3][3], float f)
 {
 	int i, j;
@@ -545,6 +621,24 @@ void mul_mat3_m4_fl(float m[4][4], float f)
 	for (i = 0; i < 3; i++)
 		for (j = 0; j < 3; j++)
 			m[i][j] *= f;
+}
+
+void negate_m3(float m[4][4])
+{
+	int i, j;
+
+	for (i = 0; i < 3; i++)
+		for (j = 0; j < 3; j++)
+			m[i][j] *= -1.0f;
+}
+
+void negate_m4(float m[4][4])
+{
+	int i, j;
+
+	for (i = 0; i < 4; i++)
+		for (j = 0; j < 4; j++)
+			m[i][j] *= -1.0f;
 }
 
 void mul_m3_v3_double(float mat[3][3], double vec[3])
@@ -601,10 +695,10 @@ float determinant_m3_array(float m[3][3])
 	        m[2][0] * (m[0][1] * m[1][2] - m[0][2] * m[1][1]));
 }
 
-int invert_m3_ex(float m[3][3], const float epsilon)
+bool invert_m3_ex(float m[3][3], const float epsilon)
 {
 	float tmp[3][3];
-	int success;
+	bool success;
 
 	success = invert_m3_m3_ex(tmp, m, epsilon);
 	copy_m3_m3(m, tmp);
@@ -612,10 +706,11 @@ int invert_m3_ex(float m[3][3], const float epsilon)
 	return success;
 }
 
-int invert_m3_m3_ex(float m1[3][3], float m2[3][3], const float epsilon)
+bool invert_m3_m3_ex(float m1[3][3], float m2[3][3], const float epsilon)
 {
 	float det;
-	int a, b, success;
+	int a, b;
+	bool success;
 
 	BLI_assert(epsilon >= 0.0f);
 
@@ -638,10 +733,10 @@ int invert_m3_m3_ex(float m1[3][3], float m2[3][3], const float epsilon)
 	return success;
 }
 
-int invert_m3(float m[3][3])
+bool invert_m3(float m[3][3])
 {
 	float tmp[3][3];
-	int success;
+	bool success;
 
 	success = invert_m3_m3(tmp, m);
 	copy_m3_m3(m, tmp);
@@ -649,10 +744,11 @@ int invert_m3(float m[3][3])
 	return success;
 }
 
-int invert_m3_m3(float m1[3][3], float m2[3][3])
+bool invert_m3_m3(float m1[3][3], float m2[3][3])
 {
 	float det;
-	int a, b, success;
+	int a, b;
+	bool success;
 
 	/* calc adjoint */
 	adjoint_m3_m3(m1, m2);
@@ -674,10 +770,10 @@ int invert_m3_m3(float m1[3][3], float m2[3][3])
 	return success;
 }
 
-int invert_m4(float m[4][4])
+bool invert_m4(float m[4][4])
 {
 	float tmp[4][4];
-	int success;
+	bool success;
 
 	success = invert_m4_m4(tmp, m);
 	copy_m4_m4(m, tmp);
@@ -688,13 +784,13 @@ int invert_m4(float m[4][4])
 /*
  * invertmat -
  *      computes the inverse of mat and puts it in inverse.  Returns
- *  TRUE on success (i.e. can always find a pivot) and FALSE on failure.
+ *  true on success (i.e. can always find a pivot) and false on failure.
  *  Uses Gaussian Elimination with partial (maximal column) pivoting.
  *
  *					Mark Segal - 1992
  */
 
-int invert_m4_m4(float inverse[4][4], float mat[4][4])
+bool invert_m4_m4(float inverse[4][4], float mat[4][4])
 {
 	int i, j, k;
 	double temp;
@@ -1057,10 +1153,17 @@ bool is_uniform_scaled_m3(float m[3][3])
 	    fabsf(l5 - l1) <= eps &&
 	    fabsf(l6 - l1) <= eps)
 	{
-		return 1;
+		return true;
 	}
 
-	return 0;
+	return false;
+}
+
+bool is_uniform_scaled_m4(float m[4][4])
+{
+	float t[3][3];
+	copy_m3_m4(t, m);
+	return is_uniform_scaled_m3(t);
 }
 
 void normalize_m3(float mat[3][3])
@@ -2089,7 +2192,7 @@ void pseudoinverse_m4_m4(float Ainv[4][4], float A[4][4], float epsilon)
 
 	transpose_m4(V);
 
-	mul_serie_m4(Ainv, U, Wm, V, NULL, NULL, NULL, NULL, NULL);
+	mul_m4_series(Ainv, U, Wm, V);
 }
 
 void pseudoinverse_m3_m3(float Ainv[3][3], float A[3][3], float epsilon)
@@ -2109,4 +2212,24 @@ bool has_zero_axis_m4(float matrix[4][4])
 	return len_squared_v3(matrix[0]) < FLT_EPSILON ||
 	       len_squared_v3(matrix[1]) < FLT_EPSILON ||
 	       len_squared_v3(matrix[2]) < FLT_EPSILON;
+}
+
+void invert_m4_m4_safe(float Ainv[4][4], float A[4][4])
+{
+	if (!invert_m4_m4(Ainv, A)) {
+		float Atemp[4][4];
+
+		copy_m4_m4(Atemp, A);
+
+		/* Matrix is degenerate (e.g. 0 scale on some axis), ideally we should
+		 * never be in this situation, but try to invert it anyway with tweak.
+		 */
+		Atemp[0][0] += 1e-8f;
+		Atemp[1][1] += 1e-8f;
+		Atemp[2][2] += 1e-8f;
+
+		if (!invert_m4_m4(Ainv, Atemp)) {
+			unit_m4(Ainv);
+		}
+	}
 }

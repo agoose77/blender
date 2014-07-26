@@ -59,7 +59,6 @@
 #include "BKE_lattice.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
-#include "BKE_mesh.h"
 #include "BKE_modifier.h"
 
 #include "BKE_deform.h"
@@ -121,11 +120,11 @@ void BKE_lattice_bitmap_from_flag(Lattice *lt, BLI_bitmap *bitmap, const short f
 	bp = lt->def;
 	for (i = 0; i < tot; i++, bp++) {
 		if ((bp->f1 & flag) && (!respecthide || !bp->hide)) {
-			BLI_BITMAP_SET(bitmap, i);
+			BLI_BITMAP_ENABLE(bitmap, i);
 		}
 		else {
 			if (clear) {
-				BLI_BITMAP_CLEAR(bitmap, i);
+				BLI_BITMAP_DISABLE(bitmap, i);
 			}
 		}
 	}
@@ -314,7 +313,7 @@ void BKE_lattice_make_local(Lattice *lt)
 {
 	Main *bmain = G.main;
 	Object *ob;
-	int is_local = FALSE, is_lib = FALSE;
+	bool is_local = false, is_lib = false;
 
 	/* - only lib users: do nothing
 	 * - only local users: set flag
@@ -327,14 +326,14 @@ void BKE_lattice_make_local(Lattice *lt)
 		return;
 	}
 	
-	for (ob = bmain->object.first; ob && ELEM(FALSE, is_lib, is_local); ob = ob->id.next) {
+	for (ob = bmain->object.first; ob && ELEM(false, is_lib, is_local); ob = ob->id.next) {
 		if (ob->data == lt) {
-			if (ob->id.lib) is_lib = TRUE;
-			else is_local = TRUE;
+			if (ob->id.lib) is_lib = true;
+			else is_local = true;
 		}
 	}
 	
-	if (is_local && is_lib == FALSE) {
+	if (is_local && is_lib == false) {
 		id_clear_lib_data(bmain, &lt->id);
 	}
 	else if (is_local && is_lib) {
@@ -368,7 +367,7 @@ LatticeDeformData *init_latt_deform(Object *oblatt, Object *ob)
 	Lattice *lt = oblatt->data;
 	BPoint *bp;
 	DispList *dl = oblatt->curve_cache ? BKE_displist_find(&oblatt->curve_cache->disp, DL_VERTS) : NULL;
-	float *co = dl ? dl->verts : NULL;
+	const float *co = dl ? dl->verts : NULL;
 	float *fp, imat[4][4];
 	float fu, fv, fw;
 	int u, v, w;
@@ -627,16 +626,19 @@ static bool calc_curve_deform(Scene *scene, Object *par, float co[3],
 	short index;
 	const bool is_neg_axis = (axis > 2);
 
-	/* to be sure, mostly after file load */
-	if (ELEM(NULL, par->curve_cache, par->curve_cache->path)) {
+	/* to be sure, mostly after file load, also cyclic dependencies */
 #ifdef CYCLIC_DEPENDENCY_WORKAROUND
-		BKE_displist_make_curveTypes(scene, par, FALSE);
-#endif
-		if (par->curve_cache->path == NULL) {
-			return 0;  // happens on append and cyclic dependencies...
-		}
+	if (par->curve_cache == NULL) {
+		BKE_displist_make_curveTypes(scene, par, false);
 	}
-	
+#endif
+
+	if (par->curve_cache->path == NULL) {
+		return 0;  /* happens on append, cyclic dependencies
+		            * and empty curves
+		            */
+	}
+
 	/* options */
 	if (is_neg_axis) {
 		index = axis - 3;
@@ -647,10 +649,17 @@ static bool calc_curve_deform(Scene *scene, Object *par, float co[3],
 	}
 	else {
 		index = axis;
-		if (cu->flag & CU_STRETCH)
+		if (cu->flag & CU_STRETCH) {
 			fac = (co[index] - cd->dmin[index]) / (cd->dmax[index] - cd->dmin[index]);
-		else
-			fac = +(co[index] - cd->dmin[index]) / (par->curve_cache->path->totdist);
+		}
+		else {
+			if (LIKELY(par->curve_cache->path->totdist > FLT_EPSILON)) {
+				fac = +(co[index] - cd->dmin[index]) / (par->curve_cache->path->totdist);
+			}
+			else {
+				fac = 0.0f;
+			}
+		}
 	}
 	
 	if (where_on_path_deform(par, fac, loc, dir, new_quat, &radius)) {  /* returns OK */
@@ -731,7 +740,7 @@ void curve_deform_verts(Scene *scene, Object *cuOb, Object *target, DerivedMesh 
 	init_curve_deform(cuOb, target, &cd);
 
 	/* dummy bounds, keep if CU_DEFORM_BOUNDS_OFF is set */
-	if (is_neg_axis == FALSE) {
+	if (is_neg_axis == false) {
 		cd.dmin[0] = cd.dmin[1] = cd.dmin[2] = 0.0f;
 		cd.dmax[0] = cd.dmax[1] = cd.dmax[2] = 1.0f;
 	}
@@ -756,7 +765,7 @@ void curve_deform_verts(Scene *scene, Object *cuOb, Object *target, DerivedMesh 
 		}
 	}
 	else {
-		use_vgroups = FALSE;
+		use_vgroups = false;
 	}
 	
 	if (vgroup && vgroup[0] && use_vgroups) {
@@ -880,7 +889,7 @@ void lattice_deform_verts(Object *laOb, Object *target, DerivedMesh *dm,
 {
 	LatticeDeformData *lattice_deform_data;
 	int a;
-	int use_vgroups;
+	bool use_vgroups;
 
 	if (laOb->type != OB_LATTICE)
 		return;
@@ -902,7 +911,7 @@ void lattice_deform_verts(Object *laOb, Object *target, DerivedMesh *dm,
 		}
 	}
 	else {
-		use_vgroups = FALSE;
+		use_vgroups = false;
 	}
 	
 	if (vgroup && vgroup[0] && use_vgroups) {

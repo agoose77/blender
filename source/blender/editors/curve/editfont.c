@@ -34,12 +34,6 @@
 #include <wchar.h>
 #include <errno.h>
 
-#ifndef WIN32 
-#  include <unistd.h>
-#else
-#  include <io.h>
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
@@ -57,7 +51,6 @@
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_font.h"
-#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
@@ -254,18 +247,8 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
 	struct Main *bmain = CTX_data_main(C);
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
-	cu->curinfo = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0];
-	
-	if (obedit->totcol > 0) {
-		obedit->actcol = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0].mat_nr;
 
-		/* since this array is calloc'd, it can be 0 even though we try ensure
-		 * (mat_nr > 0) almost everywhere */
-		if (obedit->actcol < 1) {
-			obedit->actcol = 1;
-		}
-	}
-
+	/* run update first since it can move the cursor */
 	if (mode == FO_EDIT) {
 		/* re-tesselllate */
 		DAG_id_tag_update(obedit->data, 0);
@@ -273,6 +256,18 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
 	else {
 		/* depsgraph runs above, but since we're not tagging for update, call direct */
 		BKE_vfont_to_curve(bmain, obedit, mode);
+	}
+
+	cu->curinfo = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0];
+
+	if (obedit->totcol > 0) {
+		obedit->actcol = cu->curinfo.mat_nr;
+
+		/* since this array is calloc'd, it can be 0 even though we try ensure
+		 * (mat_nr > 0) almost everywhere */
+		if (obedit->actcol < 1) {
+			obedit->actcol = 1;
+		}
 	}
 
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
@@ -716,7 +711,7 @@ static EnumPropertyItem style_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-static int set_style(bContext *C, const int style, const int clear)
+static int set_style(bContext *C, const int style, const bool clear)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;
@@ -742,7 +737,7 @@ static int set_style(bContext *C, const int style, const int clear)
 static int set_style_exec(bContext *C, wmOperator *op)
 {
 	const int style = RNA_enum_get(op->ptr, "style");
-	const int clear = RNA_boolean_get(op->ptr, "clear");
+	const bool clear = RNA_boolean_get(op->ptr, "clear");
 
 	return set_style(C, style, clear);
 }
@@ -973,7 +968,7 @@ static EnumPropertyItem move_type_items[] = {
 	{NEXT_PAGE, "NEXT_PAGE", 0, "Next Page", ""},
 	{0, NULL, 0, NULL, NULL}};
 
-static int move_cursor(bContext *C, int type, int select)
+static int move_cursor(bContext *C, int type, const bool select)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;
@@ -1063,6 +1058,14 @@ static int move_cursor(bContext *C, int type, int select)
 	else if (ef->pos >= MAXTEXT) ef->pos = MAXTEXT;
 	else if (ef->pos < 0)        ef->pos = 0;
 
+	/* apply virtical cursor motion to position immediately
+	 * otherwise the selection will lag behind */
+	if (FO_CURS_IS_MOTION(cursmove)) {
+		struct Main *bmain = CTX_data_main(C);
+		BKE_vfont_to_curve(bmain, obedit, cursmove);
+		cursmove = FO_CURS;
+	}
+
 	if (select == 0) {
 		if (ef->selstart) {
 			struct Main *bmain = CTX_data_main(C);
@@ -1083,7 +1086,7 @@ static int move_exec(bContext *C, wmOperator *op)
 {
 	int type = RNA_enum_get(op->ptr, "type");
 
-	return move_cursor(C, type, 0);
+	return move_cursor(C, type, false);
 }
 
 void FONT_OT_move(wmOperatorType *ot)
@@ -1110,7 +1113,7 @@ static int move_select_exec(bContext *C, wmOperator *op)
 {
 	int type = RNA_enum_get(op->ptr, "type");
 
-	return move_cursor(C, type, 1);
+	return move_cursor(C, type, true);
 }
 
 void FONT_OT_move_select(wmOperatorType *ot)
@@ -1790,7 +1793,7 @@ static int font_open_exec(bContext *C, wmOperator *op)
 static int open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	VFont *vfont = NULL;
-	char *path;
+	const char *path;
 
 	PointerRNA idptr;
 	PropertyPointerRNA *pprop;
@@ -1879,7 +1882,7 @@ static void undoFont_to_editFont(void *strv, void *ecu, void *UNUSED(obdata))
 {
 	Curve *cu = (Curve *)ecu;
 	EditFont *ef = cu->editfont;
-	char *str = strv;
+	const char *str = strv;
 
 	ef->pos = *((short *)str);
 	ef->len = *((short *)(str + 2));

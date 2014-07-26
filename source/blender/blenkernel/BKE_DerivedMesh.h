@@ -150,13 +150,15 @@ typedef DMDrawOption (*DMSetDrawOptions)(void *userData, int index);
 typedef DMDrawOption (*DMSetDrawOptionsTex)(struct MTFace *tface, const bool has_vcol, int matnr);
 
 typedef enum DMDrawFlag {
-	DM_DRAW_USE_COLORS = 1,
-	DM_DRAW_ALWAYS_SMOOTH = 2
+	DM_DRAW_USE_COLORS          = (1 << 0),
+	DM_DRAW_ALWAYS_SMOOTH       = (1 << 1),
+	DM_DRAW_USE_ACTIVE_UV       = (1 << 2),
+	DM_DRAW_USE_TEXPAINT_UV     = (1 << 3),
 } DMDrawFlag;
 
 typedef enum DMForeachFlag {
 	DM_FOREACH_NOP = 0,
-	DM_FOREACH_USE_NORMAL = (1 << 0),  /* foreachMappedVert, foreachMappedFaceCenter */
+	DM_FOREACH_USE_NORMAL = (1 << 0),  /* foreachMappedVert, foreachMappedLoop, foreachMappedFaceCenter */
 } DMForeachFlag;
 
 typedef enum DMDirtyFlag {
@@ -184,12 +186,17 @@ struct DerivedMesh {
 	DerivedMeshType type;
 	float auto_bump_scale;
 	DMDirtyFlag dirty;
+	int totmat; /* total materials. Will be valid only before object drawing. */
+	struct Material **mat; /* material array. Will be valid only before object drawing */
 
 	/* use for converting to BMesh which doesn't store bevel weight and edge crease by default */
 	char cd_flag;
 
 	/** Calculate vert and face normals */
 	void (*calcNormals)(DerivedMesh *dm);
+
+	/** Calculate loop (split) normals */
+	void (*calcLoopNormals)(DerivedMesh *dm, const float split_angle);
 
 	/** Recalculates mesh tessellation */
 	void (*recalcTessellation)(DerivedMesh *dm);
@@ -304,6 +311,15 @@ struct DerivedMesh {
 	                                       const float v0co[3], const float v1co[3]),
 	                          void *userData);
 
+	/** Iterate over each mapped loop in the derived mesh, calling the given function
+	 * with the original loop index and the mapped loops's new coordinate and normal.
+	 */
+	void (*foreachMappedLoop)(DerivedMesh *dm,
+	                          void (*func)(void *userData, int vertex_index, int face_index,
+	                                       const float co[3], const float no[3]),
+	                          void *userData,
+	                          DMForeachFlag flag);
+
 	/** Iterate over each mapped face in the derived mesh, calling the
 	 * given function with the original face and the mapped face's (or
 	 * faces') center and normal.
@@ -354,7 +370,7 @@ struct DerivedMesh {
 	 *
 	 * Also called for *final* editmode DerivedMeshes
 	 */
-	void (*drawEdges)(DerivedMesh *dm, int drawLooseEdges, int drawAllEdges);
+	void (*drawEdges)(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdges);
 	
 	/** Draw all loose edges (edges w/ no adjoining faces) */
 	void (*drawLooseEdges)(DerivedMesh *dm);
@@ -367,7 +383,7 @@ struct DerivedMesh {
 	 * Also called for *final* editmode DerivedMeshes
 	 */
 	void (*drawFacesSolid)(DerivedMesh *dm, float (*partial_redraw_planes)[4],
-	                       int fast, DMSetMaterial setMaterial);
+	                       bool fast, DMSetMaterial setMaterial);
 
 	/** Draw all faces using MTFace
 	 * - Drawing options too complicated to enumerate, look at code.
@@ -375,7 +391,7 @@ struct DerivedMesh {
 	void (*drawFacesTex)(DerivedMesh *dm,
 	                     DMSetDrawOptionsTex setDrawOptions,
 	                     DMCompareDrawOptions compareDrawOptions,
-	                     void *userData);
+	                     void *userData, DMDrawFlag uvflag);
 
 	/** Draw all faces with GLSL materials
 	 *  o setMaterial is called for every different material nr
@@ -409,7 +425,7 @@ struct DerivedMesh {
 	void (*drawMappedFacesTex)(DerivedMesh *dm,
 	                           DMSetDrawOptions setDrawOptions,
 	                           DMCompareDrawOptions compareDrawOptions,
-	                           void *userData);
+	                           void *userData, DMDrawFlag uvflag);
 
 	/** Draw mapped faces with GLSL materials
 	 * - setMaterial is called for every different material nr
@@ -446,7 +462,7 @@ struct DerivedMesh {
 	 * - setFace is called to verify if a face must be hidden
 	 */
 	void (*drawMappedFacesMat)(DerivedMesh *dm,
-	                           void (*setMaterial)(void *userData, int, void *attribs),
+	                           void (*setMaterial)(void *userData, int matnr, void *attribs),
 	                           bool (*setFace)(void *userData, int index), void *userData);
 
 	/** Release reference to the DerivedMesh. This function decides internally
@@ -577,6 +593,9 @@ void DM_ensure_normals(DerivedMesh *dm);
 void DM_ensure_tessface(DerivedMesh *dm);
 
 void DM_update_tessface_data(DerivedMesh *dm);
+
+void DM_update_materials(DerivedMesh *dm, struct Object *ob);
+struct MTFace *DM_paint_uvlayer_active_get(DerivedMesh *dm, int mat_nr);
 
 /** interpolates vertex data from the vertices indexed by src_indices in the
  * source mesh using the given weights and stores the result in the vertex
@@ -746,5 +765,11 @@ BLI_INLINE int DM_origindex_mface_mpoly(const int *index_mf_to_mpoly, const int 
 	const int j = index_mf_to_mpoly[i];
 	return (j != ORIGINDEX_NONE) ? (index_mp_to_orig ? index_mp_to_orig[j] : j) : ORIGINDEX_NONE;
 }
+
+struct MVert *DM_get_vert_array(struct DerivedMesh *dm, bool *allocated);
+struct MEdge *DM_get_edge_array(struct DerivedMesh *dm, bool *allocated);
+struct MLoop *DM_get_loop_array(struct DerivedMesh *dm, bool *allocated);
+struct MPoly *DM_get_poly_array(struct DerivedMesh *dm, bool *allocated);
+struct MFace *DM_get_tessface_array(struct DerivedMesh *dm, bool *allocated);
 
 #endif  /* __BKE_DERIVEDMESH_H__ */

@@ -41,7 +41,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_math_color_blend.h"
 #include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
@@ -121,7 +120,7 @@ static int panel_aligned(ScrArea *sa, ARegion *ar)
 		return BUT_VERTICAL;
 	else if (sa->spacetype == SPACE_IMAGE && ar->regiontype == RGN_TYPE_PREVIEW)
 		return BUT_VERTICAL;
-	else if (ELEM3(ar->regiontype, RGN_TYPE_UI, RGN_TYPE_TOOLS, RGN_TYPE_TOOL_PROPS))
+	else if (ELEM(ar->regiontype, RGN_TYPE_UI, RGN_TYPE_TOOLS, RGN_TYPE_TOOL_PROPS))
 		return BUT_VERTICAL;
 	
 	return 0;
@@ -210,8 +209,8 @@ Panel *uiPanelFindByType(ARegion *ar, PanelType *pt)
 	const char *tabname = pt->idname;
 
 	for (pa = ar->panels.first; pa; pa = pa->next) {
-		if (STREQLEN(pa->panelname, idname, UI_MAX_NAME_STR)) {
-			if (STREQLEN(pa->tabname, tabname, UI_MAX_NAME_STR)) {
+		if (STREQLEN(pa->panelname, idname, sizeof(pa->panelname))) {
+			if (STREQLEN(pa->tabname, tabname, sizeof(pa->panelname))) {
 				return pa;
 			}
 		}
@@ -227,9 +226,9 @@ Panel *uiBeginPanel(ScrArea *sa, ARegion *ar, uiBlock *block, PanelType *pt, Pan
 {
 	Panel *patab, *palast, *panext;
 	const char *drawname = CTX_IFACE_(pt->translation_context, pt->label);
-	char *idname = pt->idname;
-	char *tabname = pt->idname;
-	char *hookname = NULL;
+	const char *idname = pt->idname;
+	const char *tabname = pt->idname;
+	const char *hookname = NULL;
 	const bool newpanel = (pa == NULL);
 	int align = panel_aligned(sa, ar);
 
@@ -240,8 +239,8 @@ Panel *uiBeginPanel(ScrArea *sa, ARegion *ar, uiBlock *block, PanelType *pt, Pan
 		/* new panel */
 		pa = MEM_callocN(sizeof(Panel), "new panel");
 		pa->type = pt;
-		BLI_strncpy(pa->panelname, idname, UI_MAX_NAME_STR);
-		BLI_strncpy(pa->tabname, tabname, UI_MAX_NAME_STR);
+		BLI_strncpy(pa->panelname, idname, sizeof(pa->panelname));
+		BLI_strncpy(pa->tabname, tabname, sizeof(pa->tabname));
 
 		if (pt->flag & PNL_DEFAULT_CLOSED) {
 			if (align == BUT_VERTICAL)
@@ -262,8 +261,8 @@ Panel *uiBeginPanel(ScrArea *sa, ARegion *ar, uiBlock *block, PanelType *pt, Pan
 		if (hookname) {
 			for (patab = ar->panels.first; patab; patab = patab->next) {
 				if ((patab->runtime_flag & PNL_ACTIVE) && patab->paneltab == NULL) {
-					if (strncmp(hookname, patab->panelname, UI_MAX_NAME_STR) == 0) {
-						if (strncmp(tabname, patab->tabname, UI_MAX_NAME_STR) == 0) {
+					if (STREQLEN(hookname, patab->panelname, sizeof(patab->panelname))) {
+						if (STREQLEN(tabname, patab->tabname, sizeof(patab->tabname))) {
 							pa->paneltab = patab;
 							ui_panel_copy_offset(pa, patab);
 							break;
@@ -892,7 +891,7 @@ static void ui_do_animate(const bContext *C, Panel *panel)
 	float fac;
 
 	fac = (PIL_check_seconds_timer() - data->starttime) / ANIMATION_TIME;
-	fac = min_ff(sqrt(fac), 1.0f);
+	fac = min_ff(sqrtf(fac), 1.0f);
 
 	/* for max 1 second, interpolate positions */
 	if (uiAlignPanelStep(sa, ar, fac, false)) {
@@ -1132,7 +1131,7 @@ static void ui_handle_panel_header(const bContext *C, uiBlock *block, int mx, in
 		button = 1;
 	else if (event == AKEY)
 		button = 1;
-	else if (ELEM3(event, 0, RETKEY, LEFTMOUSE) && shift) {
+	else if (ELEM(event, 0, RETKEY, LEFTMOUSE) && shift) {
 		block->panel->flag ^= PNL_PIN;
 		button = 2;
 	}
@@ -1717,7 +1716,7 @@ int ui_handler_panel_region(bContext *C, const wmEvent *event, ARegion *ar)
 		
 		/* XXX hardcoded key warning */
 		if ((inside || inside_header) && event->val == KM_PRESS) {
-			if (event->type == AKEY && !ELEM4(KM_MOD_FIRST, event->ctrl, event->oskey, event->shift, event->alt)) {
+			if (event->type == AKEY && !ELEM(KM_MOD_FIRST, event->ctrl, event->oskey, event->shift, event->alt)) {
 				
 				if (pa->flag & PNL_CLOSEDY) {
 					if ((block->rect.ymax <= my) && (block->rect.ymax + PNL_HEADER >= my))

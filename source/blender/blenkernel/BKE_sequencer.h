@@ -331,7 +331,7 @@ bool BKE_sequence_is_valid_check(struct Sequence *seq);
 
 void BKE_sequencer_clear_scene_in_allseqs(struct Main *bmain, struct Scene *sce);
 
-struct Sequence *BKE_sequence_get_by_name(struct ListBase *seqbase, const char *name, int recursive);
+struct Sequence *BKE_sequence_get_by_name(struct ListBase *seqbase, const char *name, bool recursive);
 
 /* api for adding new sequence strips */
 typedef struct SeqLoadInfo {
@@ -340,11 +340,14 @@ typedef struct SeqLoadInfo {
 	int channel;
 	int flag;   /* use sound, replace sel */
 	int type;
-	int tot_success;
-	int tot_error;
 	int len;        /* only for image strips */
 	char path[1024]; /* 1024 = FILE_MAX */
+
+	/* return values */
 	char name[64];
+	struct Sequence *seq_sound;  /* for movie's */
+	int tot_success;
+	int tot_error;
 } SeqLoadInfo;
 
 /* SeqLoadInfo.flag */
