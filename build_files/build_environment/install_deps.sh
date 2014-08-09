@@ -28,7 +28,7 @@ getopt \
 --long source:,install:,tmp:,threads:,help,no-sudo,with-all,with-opencollada,ver-ocio:,ver-oiio:,ver-llvm:,ver-osl:,\
 force-all,force-python,force-numpy,force-boost,force-ocio,force-oiio,force-llvm,force-osl,force-opencollada,\
 force-ffmpeg,skip-python,skip-numpy,skip-boost,skip-ocio,skip-oiio,skip-llvm,skip-osl,skip-ffmpeg,\
-skip-opencollada,required-numpy,libyaml-cpp-ver: \
+skip-opencollada,required-numpy: \
 -- "$@" \
 )
 
@@ -965,12 +965,11 @@ clean_ILMBASE() {
 
 compile_ILMBASE() {
   # To be changed each time we make edits that would modify the compiled result!
-  ilmbase_magic=8
+  ilmbase_magic=9
   _init_ilmbase
 
   # Clean install if needed!
   magic_compile_check ilmbase-$ILMBASE_VERSION $ilmbase_magic
-
   if [ $? -eq 1 -o $OPENEXR_FORCE_REBUILD == true ]; then
     clean_ILMBASE
     rm -rf $_openexr_inst
@@ -1052,7 +1051,7 @@ clean_OPENEXR() {
 
 compile_OPENEXR() {
   # To be changed each time we make edits that would modify the compiled result!
-  openexr_magic=12
+  openexr_magic=13
 
   # Clean install if needed!
   magic_compile_check openexr-$OPENEXR_VERSION $openexr_magic
@@ -1741,11 +1740,6 @@ install_packages_DEB() {
 install_DEB() {
   PRINT ""
   INFO "Installing dependencies for DEB-based distribution"
-  PRINT ""
-  WARNING "Beware of recent Ubuntu/Debian!!!"
-  PRINT "Ubuntu 14.4 and Debian Jessie come with a default libyaml-cpp in 0.5 version, while their ocio package still"
-  PRINT "uses the 0.3 version. You have to use '--libyaml-cpp-ver=0.3' option (else Blender will builds with 0.5,"
-  PRINT "and break when using packaged ocio)..."
   PRINT ""
   PRINT "`eval _echo "$COMMON_INFO"`"
   PRINT ""

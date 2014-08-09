@@ -465,11 +465,13 @@ void ED_view3d_quadview_update(ScrArea *sa, ARegion *ar, bool do_clip)
 	 * properties are always being edited, weak */
 	viewlock = rv3d->viewlock;
 
-	if ((viewlock & RV3D_LOCKED) == 0)
+	if ((viewlock & RV3D_LOCKED) == 0) {
+		do_clip = (viewlock & RV3D_BOXCLIP) != 0;
 		viewlock = 0;
-	else if ((viewlock & RV3D_BOXVIEW) == 0) {
-		viewlock &= ~RV3D_BOXCLIP;
+	}
+	else if ((viewlock & RV3D_BOXVIEW) == 0 && (viewlock & RV3D_BOXCLIP) != 0) {
 		do_clip = true;
+		viewlock &= ~RV3D_BOXCLIP;
 	}
 
 	for (; ar; ar = ar->prev) {
@@ -3243,6 +3245,8 @@ static int render_border_exec(bContext *C, wmOperator *op)
 
 void VIEW3D_OT_render_border(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Set Render Border";
 	ot->description = "Set the boundaries of the border render and enable border render";
@@ -3262,7 +3266,8 @@ void VIEW3D_OT_render_border(wmOperatorType *ot)
 	/* rna */
 	WM_operator_properties_border(ot);
 
-	RNA_def_boolean(ot->srna, "camera_only", 0, "Camera Only", "Set render border for camera view and final render only");
+	prop = RNA_def_boolean(ot->srna, "camera_only", 0, "Camera Only", "Set render border for camera view and final render only");
+	RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
 /* ********************* Clear render border operator ****************** */
