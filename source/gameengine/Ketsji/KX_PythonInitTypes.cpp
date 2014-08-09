@@ -99,6 +99,7 @@
 #include "KX_NavMeshObject.h"
 #include "KX_PythonLogicLoop.h"
 #include "KX_MouseActuator.h"
+#include "KX_PythonLogicLoop.h"
 
 static void PyType_Attr_Set(PyGetSetDef *attr_getset, PyAttributeDef *attr)
 {

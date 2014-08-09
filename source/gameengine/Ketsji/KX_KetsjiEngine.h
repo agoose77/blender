@@ -247,7 +247,6 @@ public:
 	void			SetSceneConverter(KX_ISceneConverter* sceneconverter);
 	void			SetAnimRecordMode(bool animation_record);
 	KX_ISceneConverter* GetSceneConverter() { return m_sceneconverter; }
-	void			SetAnimRecordMode(bool animation_record, int startFrame);
 
 	KX_EngineCallbackData*		GetEngineCallbacks() {return m_logiccallbacks;}
 	RAS_IRasterizer*		GetRasterizer() { return m_rasterizer; }
